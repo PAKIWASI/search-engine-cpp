@@ -1,8 +1,17 @@
 #include <iostream>
+#include <nlohmann_json.hpp>
+
+// external modern json library (nlohmann/json)
+using json = nlohmann::json;
 
 int main() 
 {
-    std::cout << "Hello from C++ CMake Ninja project!" << '\n';
+    json j = {
+    {"name", "John"},
+    {"age", "30"},
+    {"cities", {"New York", "London"}}
+    };
 
+    std::cout << j.dump(4);
     return 0;
 }
