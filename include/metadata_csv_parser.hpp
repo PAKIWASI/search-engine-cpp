@@ -1,111 +1,72 @@
-#include <cstdio>
-#include <iostream>
-#include <fstream>
+#pragma once
+
+#include <cstdint>
+#include <unordered_map>
 #include <vector>
 #include <string>
 
-/*
- * paper structure:
- 
-    cord_uid, 
-    sha, 
-    source_x, 
-    title, 
-    doi, 
-    pmcid, 
-    pubmed_id, 
-    license,
-    abstract, 
-    publish_time, 
-    authors, 
-    journal, 
-    Microsoft Academic Paper ID, 
-    WHO #Covidence, 
-    has_pdf_p, 
-    se, 
-    has_pmc_xml_parse, 
-    full_text_file, 
-    url
-*/
 
+/* Fields we Need
+1 -> cord_uid
+2 -> sha
+4 -> title
+9 -> abstract
+11 -> authors
+15 -> has_pdf_parse
+16 -> has_pmc_xml_parse
+17 -> full_text_file
 
-class metadataParser_CSV {
-private:
+TOTAL SIZE = 18 (we'll consider only these)
+ */
 
-
+struct Paper {
+    uint16_t id; // our own id
+    std::string cord_uid;
+    std::string sha;
+    std::string title;
+    std::string abstract;
+    std::vector<std::string> authors;
+    std::string* full_text;
 };
 
+/*
+    // Get combined text for indexing
+    std::string get_indexable_text() const {
+        return title + " " + abstract + " " + full_text;
+    }
+    
+    bool has_text() const {
+        return !title.empty() || !abstract.empty() || !full_text.empty();
+    }
+*/
 
 // Parse CSV line handling quotes and commas
-void parseCSVLine(const std::string& line, std::vector<std::string>& parsed_line) 
-{
-    parsed_line.clear();
-    std::string field;
-    bool inQuotes = false;
-    
-    for (char c : line) {
-        if (c == ';') { continue; }
-        if (c == '"') {
-            inQuotes = !inQuotes;
-        } else if (c == ',' && !inQuotes) {
-            parsed_line.push_back(field);
-            field.clear();
-        } else {
-            field += c;
-        }
-    }
-    parsed_line.push_back(field);
-}
-
-int metadata_parse_run()
-{
-    std::ifstream file("data/2020-04-10/metadata.csv"); 
-    if (!file.is_open()) {
-        std::cout << "can't open metadata.csv\n";
-    }
-      std::string line;
-        
-    // Read header
-    if (!getline(file, line)) {
-        std::cerr << "Error: Empty metadata file" << '\n';
-        return -1;
-    }
-    
-    std::vector<std::string> parsed_lines;
-    parseCSVLine(line, parsed_lines);
-    std::cout << "headers: ";
-    for (const auto& p : parsed_lines) {
-        std::cout << p << ", ";
-    }
-    std::cout << '\n';
-    
-    std::cout << "Loading metadata..." << '\n';
-
-    getline(file,line);
-    parseCSVLine(line, parsed_lines);
-    for (const auto& p : parsed_lines) {
-        std::cout << p << ", ";
-    }
-    
-    
-    /*
-    // Read papers
-    for (int i = 0; i < 10; i++) {
-        if (!getline(file, line)) {
-            std::cerr << "error reading line: " << i << '\n';
-            return -1;
-        }
-
-        std::vector<std::string> parsed_lines;
-        parseCSVLine(line, parsed_lines);
-        for (const auto& p: parsed_lines) {
-            std::cout << p << ", ";
-        }
-        std::cout << '\n';
-    }
-         */
+void parseCSVLine(const std::string& line, std::vector<std::string>& parsed_line);
 
 
-    file.close();
-    return 0;
-}
+int metadata_parse_stats();
+
+
+class PaperLoader {
+private:
+    std::string dataset_path;
+    std::unordered_map<std::string, int> column_index;
+    
+    // Find JSON file by SHA
+    std::string find_json_by_sha(const std::string& sha);
+    
+    // Extract text from JSON file
+    std::string extract_text_from_json(const std::string& json_path);
+    
+    // Get field from parsed CSV line
+    std::string get_field(const std::vector<std::string>& fields, const std::string& col_name);
+    
+public:
+    explicit PaperLoader(const std::string& path);
+    
+    // Load papers from metadata.csv
+    std::vector<Paper> load_papers(int max_papers = -1);
+    
+    // Print statistics
+    void print_stats(const std::vector<Paper>& papers);
+};

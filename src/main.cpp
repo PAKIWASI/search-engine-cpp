@@ -3,5 +3,5 @@
 
 int main()
 {
-    return metadata_parse_run(); 
+    return metadata_parse_stats(); 
 }
