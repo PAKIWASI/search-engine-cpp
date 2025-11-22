@@ -1,4 +1,25 @@
+# folders
 build/
-.cache
+data/
+
+# configs
 CMakeLists.txt
 .clangd
+
+# IDEs
+.cache
+.vscode/
+.vs/
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.suo
+*.sdf
+ipch/
+*.aps
+*.ncb
+*.opensdf
+*.sln.docstates
+
+
