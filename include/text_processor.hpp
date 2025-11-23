@@ -7,7 +7,6 @@
 class TextProcessor
 {
 private:
-    uint32_t doc_id = 0;
     // Lexicon: word -> frequency count
     std::unordered_map<std::string, uint32_t> lexicon;
     

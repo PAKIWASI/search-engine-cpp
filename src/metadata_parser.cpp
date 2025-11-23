@@ -18,10 +18,11 @@ using json = nlohmann::json;
 
 // field name to index mapping
 #define CORD_UID    0
-#define SHA         1
+#define SHA         1   // for pdfs
 #define TITLE       3
-#define PMC_ID      5 
+#define PMC_ID      5   // for xmls
 #define ABSTRACT    8
+
 
 
 // Public funcs
@@ -71,18 +72,25 @@ int MetadataParser::metadata_parse()
 
         // Build text for processing
         std::string body_text;
+
+        // add title
+        if (parsed_line.size() > TITLE && !parsed_line[TITLE].empty())
+        {
+            body_text += parsed_line[TITLE];
+            body_text += "\n\n";
+        }
         
-        // Add abstract
+        // add abstract
         if (parsed_line.size() > ABSTRACT && !parsed_line[ABSTRACT].empty()) 
         {
             body_text += parsed_line[ABSTRACT];
             body_text += "\n\n";
         }
         
-        // Try to find PDF first
+        // try to find PDFs first (about 38k of em)
         std::string path_pdf = find_fulltext_pdf(parsed_line[SHA]);
         
-        // If no PDF, try XML
+        // if no PDF, try XML (only finding about 800 of em --something wrong)
         if (path_pdf.empty() && parsed_line.size() > PMC_ID) {
             std::string path_xml = find_fulltext_xml(parsed_line[PMC_ID]);
             if (!path_xml.empty()) {
@@ -92,14 +100,14 @@ int MetadataParser::metadata_parse()
             extract_body_text(path_pdf, body_text);
         }
         
-        // Process with Python lemmatizer
+        // process with python lemmatizer
         if (!body_text.empty()) {
             bool success = text_processor.process_text(body_text);
             if (success) {
                 processed_count++;
             } else {
                 failed_count++;
-                if (failed_count <= 5) {  // Show first few failures
+                if (failed_count <= 5) {  // DEBUG: show first few failures
                     std::cerr << "Warning: Failed to process paper " << paper_count << "\n";
                 }
             }
