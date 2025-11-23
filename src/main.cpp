@@ -1,8 +1,14 @@
-#include <iostream>
+#include "metadata_parser.hpp"
 
-int main() 
+
+int main()
 {
-    std::cout << "Hello from C++ CMake Ninja project!" << '\n';
+    const std::string data_path = "data/2020-04-10"; 
+
+    MetadataParser parser(data_path);
+
+    parser.metadata_parse();
+
 
     return 0;
 }
