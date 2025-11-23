@@ -1,7 +1,14 @@
-#include "metadata_csv_parser.hpp"
+#include "metadata_parser.hpp"
 
 
 int main()
 {
-    return metadata_parse_stats(); 
+    const std::string data_path = "data/2020-04-10"; 
+
+    MetadataParser parser(data_path);
+
+    parser.metadata_stats();
+
+
+    return 0;
 }
