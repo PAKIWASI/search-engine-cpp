@@ -26,12 +26,70 @@ using json = nlohmann::json;
 // Public funcs
 
 
+// main parser
+
+int MetadataParser::metadata_parse() 
+{
+    std::ifstream file(data_path + "/metadata.csv"); 
+    if (!file.is_open()) {
+        std::cout << "can't open metadata.csv\n";
+    }
+
+    std::string line;
+        
+    // Read header
+    if (!getline(file, line)) {
+        std::cerr << "Error: Empty metadata file" << '\n';
+        return -1;
+    }
+
+    std::vector<std::string> parsed_line;
+
+    parse_csv_line(line, parsed_line);
+
+    std::cout << "Parsed Header: ";
+    for(const auto& p : parsed_line) {
+        std::cout << p << ' ';
+    }
+    std::cout << '\n';
+
+
+    std::cout << "Reading metadata..." << '\n';
+    
+    // read all the csv lines
+    while (getline(file, line)) 
+    {
+        // parse them into vec of strs
+        parse_csv_line(line, parsed_line);
+
+        // find the file related to the sha id
+
+        std::string path = find_fulltext(parsed_line[SHA]);
+
+        // build file for Text processing
+        std::string body_text = "ABSTRACT:\n";
+        body_text += parsed_line[ABSTRACT];
+        body_text += "\nBODY:\n";
+        extract_body_text(path, body_text); 
+        std::cout << body_text << '\n';
+
+        // TODO: pass to Text Processor
+        
+    }
+
+
+    file.close();
+    return 0;
+}
+
+
 int MetadataParser::metadata_stats()
 {
     std::ifstream file(data_path + "/metadata.csv"); 
     if (!file.is_open()) {
         std::cout << "can't open metadata.csv\n";
     }
+
     std::string line;
         
     // Read header
@@ -126,65 +184,6 @@ int MetadataParser::metadata_stats()
 }
 
 
-// main parser
-
-int MetadataParser::metadata_parse() 
-{
-    std::ifstream file(data_path + "/metadata.csv"); 
-    if (!file.is_open()) {
-        std::cout << "can't open metadata.csv\n";
-    }
-    std::string line;
-        
-    // Read header
-    if (!getline(file, line)) {
-        std::cerr << "Error: Empty metadata file" << '\n';
-        return -1;
-    }
-
-    std::vector<std::string> parsed_line;
-
-    parse_csv_line(line, parsed_line);
-
-    std::cout << "Parsed Header: ";
-    for(const auto& p : parsed_line) {
-        std::cout << p << ' ';
-    }
-    std::cout << '\n';
-
-
-    std::cout << "Reading metadata..." << '\n';
-    
-    // read all the csv lines
-    int a = 1;
-    while (getline(file, line)) 
-    {
-        // parse them into vec of strs
-        parse_csv_line(line, parsed_line);
-
-        // find the file related to the sha id
-
-        if (a % 10000 == 0) {
-            std::string path = find_fulltext(parsed_line[SHA]);
-
-            // build file for Text processing
-            std::string body_text = "ABSTRACT:\n";
-            body_text += parsed_line[ABSTRACT];
-            body_text += "\nBODY:\n";
-            extract_body_text(path, body_text); 
-            
-            std::cout << body_text << '\n';
-        }
-        a++;
-    }
-
-
-    file.close();
-    return 0;
-}
-
-
-
 // Private funcs
 
 // Parse CSV line handling quotes and commas
@@ -244,6 +243,7 @@ std::string MetadataParser::find_fulltext(std::string& sha)
 
 void MetadataParser::extract_body_text(const std::string& file_path, std::string& body_text) 
 {
+    if (file_path.empty()) { return; }
     try {
         std::ifstream file(file_path);
         json data = json::parse(file);
