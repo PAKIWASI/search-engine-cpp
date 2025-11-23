@@ -1,5 +1,6 @@
 #include "text_processor.hpp"
 #include <algorithm>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <cstdio>
@@ -45,20 +46,10 @@ bool TextProcessor::call_python_lemmatizer_with_file(const std::string& text,
     if (status != 0) {
         std::cerr << "Error: Python script failed with status " << status << "\n";
         
-        // Try to read error output
-        std::ifstream error_file(temp_error);
-        if (error_file.is_open()) {
-            std::string line;
-            std::cerr << "Python errors:\n";
-            while (std::getline(error_file, line)) {
-                std::cerr << "  " << line << "\n";
-            }
-        }
-        
         // Cleanup
         remove(temp_input.c_str());
         remove(temp_output.c_str());
-        remove(temp_error.c_str());
+       // remove(temp_error.c_str());
         return false;
     }
     
@@ -76,18 +67,19 @@ bool TextProcessor::call_python_lemmatizer_with_file(const std::string& text,
     bool first_line = true;
     
     while (std::getline(output_file, line)) {
-        // Skip header
+        // skip header
         if (first_line) {
             first_line = false;
             continue;
         }
         
-        // Skip empty lines
+        // skip empty lines
         if (line.empty()) { continue; }
         
-        // Parse CSV line: word,frequency
+        // parse CSV line: word,frequency
         size_t comma_pos = line.find(',');
-        if (comma_pos != std::string::npos) {
+        if (comma_pos != std::string::npos) 
+        {
             std::string word = line.substr(0, comma_pos);
             std::string freq_str = line.substr(comma_pos + 1);
             
@@ -157,14 +149,14 @@ void TextProcessor::save_lexicon(const std::string& output_path)
               [](const auto& a, const auto& b) { return a.second > b.second; });
     
     // Write to file
+    uint32_t docid = 0;
     file << "word,docid,frequency\n";
     for (const auto& [word, freq] : sorted_lexicon) {
-        file << word << "," << doc_id << "," << freq << '\n';
+        file << word << "," << docid++ << "," << freq << '\n';
     }
-    doc_id++;
     
     file.close();
-    std::cout << "\n✓ Lexicon saved to " << output_path << '\n';
+    std::cout << "\nLexicon saved to " << output_path << '\n';
     std::cout << "  Total unique terms: " << lexicon.size() << '\n';
 }
 
@@ -174,15 +166,12 @@ void TextProcessor::print_top_words(int n)
     std::sort(sorted_lexicon.begin(), sorted_lexicon.end(),
               [](const auto& a, const auto& b) { return a.second > b.second; });
     
-    std::cout << "\n========================================\n";
     std::cout << "  Top " << n << " Most Frequent Terms\n";
-    std::cout << "========================================\n";
     for (int i = 0; i < std::min(n, static_cast<int>(sorted_lexicon.size())); ++i) {
         std::cout << std::setw(4) << (i + 1) << ". "
                   << std::setw(25) << std::left << sorted_lexicon[i].first 
                   << std::setw(10) << std::right << sorted_lexicon[i].second << '\n';
     }
-    std::cout << "========================================\n";
 }
 
 void TextProcessor::clear_lexicon() 

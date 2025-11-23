@@ -25,7 +25,6 @@ public:
 
     // main file for parsing
     int metadata_parse();
-    int metadata_parse2();
 };
 
 

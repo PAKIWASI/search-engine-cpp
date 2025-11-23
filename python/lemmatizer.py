@@ -2,7 +2,8 @@ import sys
 import spacy
 from collections import Counter
 
-# Load spaCy model
+
+# Load spaCy model # I HATE THIS FUCKING SHIT
 try:
     nlp = spacy.load("en_core_web_sm")
 except OSError:
@@ -10,7 +11,7 @@ except OSError:
     print("Install with: python -m spacy download en_core_web_sm", file=sys.stderr)
     sys.exit(1)
 
-# Medical/biomedical terms to preserve (keep original form)
+# Medical/biomedical terms to preserve (keep original form) # AI gen
 MEDICAL_PRESERVE = {
     'covid', 'covid-19', 'covid19', 'sars', 'sars-cov', 'sars-cov-2', 
     'mers', 'mers-cov', 'coronavirus', 'coronaviruses',
@@ -54,10 +55,7 @@ MEDICAL_ABBREV = {
 }
 
 def lemmatize_text(text):
-    """
-    Lemmatize text with special handling for medical terms
-    """
-    # Process with spaCy
+        # process with spaCy
     doc = nlp(text)
     
     lexicon = Counter()
@@ -67,33 +65,33 @@ def lemmatize_text(text):
         if token.is_punct or token.is_space or token.like_num:
             continue
         
-        # Get lowercase version for checking
+        # get lowercase version for checking
         token_lower = token.text.lower()
         
-        # Skip very short tokens (unless medical abbreviation)
+        # skip very short tokens (unless medical abbreviation)
         if len(token_lower) < 2:
             continue
         
         if len(token_lower) == 2 and token_lower not in MEDICAL_ABBREV:
             continue
         
-        # Skip common stop words (but not medical ones)
+        # skip common stop words (but not medical ones)
         if token.is_stop and token_lower not in MEDICAL_PRESERVE:
             continue
         
-        # Preserve medical terms and abbreviations as-is
+        # preserve medical terms and abbreviations as-is
         if token_lower in MEDICAL_PRESERVE or token_lower in MEDICAL_ABBREV:
             lexicon[token_lower] += 1
             continue
         
-        # Get lemma from spaCy
+        # get lemma from spaCy
         lemma = token.lemma_.lower().strip()
         
-        # Skip if lemma is empty or too short
+        # skip if lemma is empty or too short
         if not lemma or len(lemma) < 3:
             continue
         
-        # Skip common pronouns and determiners
+        # skip common pronouns and determiners
         if lemma in {'i', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 
                      'her', 'us', 'them', 'my', 'his', 'her', 'its', 
                      'our', 'their', 'this', 'that', 'these', 'those'}:
@@ -104,28 +102,28 @@ def lemmatize_text(text):
     return lexicon
 
 def main():
-    # Read all text from stdin
+    # read all text from stdin
     text = sys.stdin.read()
     
     if not text.strip():
         print("ERROR: No input text received", file=sys.stderr)
         sys.exit(1)
     
-    # Process text
+    # process text
     print("Processing text...", file=sys.stderr)
     lexicon = lemmatize_text(text)
     
-    # Output CSV format to stdout
+    # output CSV format to stdout
     print("word,frequency")
     for word, freq in lexicon.most_common():
         # Escape any commas (shouldn't happen but be safe)
         word_escaped = word.replace(',', '_')
         print(f"{word_escaped},{freq}")
     
-    # Log statistics to stderr (won't interfere with CSV output)
-    print(f"✓ Processed {len(lexicon)} unique terms", file=sys.stderr)
+    # log statistics to stderr (won't interfere with CSV output)
+    print(f"Processed {len(lexicon)} unique terms", file=sys.stderr)
     
-    # Show top 10 for debugging
+    # show top 10 for debugging
     print("Top 10 terms:", file=sys.stderr)
     for i, (word, freq) in enumerate(lexicon.most_common(10), 1):
         print(f"  {i}. {word}: {freq}", file=sys.stderr)

@@ -28,12 +28,12 @@ using json = nlohmann::json;
 
 
 // main parser
-
 int MetadataParser::metadata_parse() 
 {
     std::ifstream file(data_path + "/metadata.csv"); 
     if (!file.is_open()) {
-        std::cout << "can't open metadata.csv\n";
+        std::cout << "Error: can't open metadata.csv\n";
+        return -1;
     }
 
     std::string line;
@@ -45,40 +45,92 @@ int MetadataParser::metadata_parse()
     }
 
     std::vector<std::string> parsed_line;
-
     parse_csv_line(line, parsed_line);
 
-    std::cout << "Parsed Header: ";
-    for(const auto& p : parsed_line) {
-        std::cout << p << ' ';
-    }
-    std::cout << '\n';
-
-
-    std::cout << "Reading metadata..." << '\n';
+    // Initialize TextProcessor (python script)
+    TextProcessor text_processor(
+        "python/.venv/bin/python3", 
+        "python/lemmatizer.py"
+    );
     
-    // read all the csv lines
+    std::cout << "\nStarting paper processing...\n";
+    std::cout << "-------------------------------------------\n";
+    
+    int paper_count = 0;
+    int processed_count = 0;
+    int failed_count = 0;
+    int skipped_count = 0;
+    
+    // Read all the csv lines
     while (getline(file, line)) 
     {
-
-        if (line.empty()) { continue; }
-        // parse them into vec of strs
+        paper_count++;
+        
+        // Parse CSV line
         parse_csv_line(line, parsed_line);
 
-        // find the file related to the sha id
-
-        std::string path = find_fulltext_pdf(parsed_line[SHA]);
-
-        // build file for Text processing
-        std::string body_text = parsed_line[ABSTRACT];
-        body_text += "\n\n";
-        extract_body_text(path, body_text); 
-        std::cout << body_text << '\n';
-
-        // TODO: pass to Text Processor to lemitize and build lexicon
+        // Build text for processing
+        std::string body_text;
         
+        // Add abstract
+        if (parsed_line.size() > ABSTRACT && !parsed_line[ABSTRACT].empty()) 
+        {
+            body_text += parsed_line[ABSTRACT];
+            body_text += "\n\n";
+        }
+        
+        // Try to find PDF first
+        std::string path_pdf = find_fulltext_pdf(parsed_line[SHA]);
+        
+        // If no PDF, try XML
+        if (path_pdf.empty() && parsed_line.size() > PMC_ID) {
+            std::string path_xml = find_fulltext_xml(parsed_line[PMC_ID]);
+            if (!path_xml.empty()) {
+                extract_body_text(path_xml, body_text);
+            }
+        } else if (!path_pdf.empty()) {
+            extract_body_text(path_pdf, body_text);
+        }
+        
+        // Process with Python lemmatizer
+        if (!body_text.empty()) {
+            bool success = text_processor.process_text(body_text);
+            if (success) {
+                processed_count++;
+            } else {
+                failed_count++;
+                if (failed_count <= 5) {  // Show first few failures
+                    std::cerr << "Warning: Failed to process paper " << paper_count << "\n";
+                }
+            }
+        } else {
+            skipped_count++;
+        }
+        
+        // progress
+        if (paper_count % 1 == 0) {
+            std::cout << "Progress: " << paper_count << " papers, "
+                      << processed_count << " processed, "
+                      << text_processor.get_lexicon_size() << " unique terms"
+                      << '\n';
+        }
+        
+        // limit for testing 
+        if (paper_count >= 20) { break; }
     }
 
+    std::cout << "Total papers read:       " << paper_count << "\n";
+    std::cout << "Successfully processed:  " << processed_count << "\n";
+    std::cout << "Failed:                  " << failed_count << "\n";
+    std::cout << "Skipped (no text):       " << skipped_count << "\n";
+    std::cout << "Unique terms in lexicon: " << text_processor.get_lexicon_size() << "\n";
+    
+    // Print top terms
+    text_processor.print_top_words(50);
+    
+    // Save lexicon to file
+    std::string output_path = "indices/lexicon_cordR1.csv";
+    text_processor.save_lexicon(output_path);
 
     file.close();
     return 0;
@@ -300,114 +352,6 @@ void MetadataParser::extract_body_text(const std::string& file_path, std::string
 }
 
 
-int MetadataParser::metadata_parse2() 
-{
-    std::ifstream file(data_path + "/metadata.csv"); 
-    if (!file.is_open()) {
-        std::cout << "Error: can't open metadata.csv\n";
-        return -1;
-    }
 
-    std::string line;
-        
-    // Read header
-    if (!getline(file, line)) {
-        std::cerr << "Error: Empty metadata file" << '\n';
-        return -1;
-    }
-
-    std::vector<std::string> parsed_line;
-    parse_csv_line(line, parsed_line);
-
-
-    // Initialize TextProcessor (python script)
-    TextProcessor text_processor(
-        "python/.venv/bin/python3", 
-        "python/lemmatizer.py"
-    );
-    
-    
-    std::cout << "\nStarting paper processing...\n";
-    std::cout << "-------------------------------------------\n";
-    
-    int paper_count = 0;
-    int processed_count = 0;
-    int failed_count = 0;
-    int skipped_count = 0;
-    
-    // Read all the csv lines
-    while (getline(file, line)) 
-    {
-        paper_count++;
-        
-        // Parse CSV line
-        parse_csv_line(line, parsed_line);
-
-        // Build text for processing
-        std::string body_text;
-        
-        // Add abstract
-        if (parsed_line.size() > ABSTRACT && !parsed_line[ABSTRACT].empty()) 
-        {
-            body_text += parsed_line[ABSTRACT];
-            body_text += "\n\n";
-        }
-        
-        // Try to find PDF first
-        std::string path_pdf = find_fulltext_pdf(parsed_line[SHA]);
-        
-        // If no PDF, try XML
-        if (path_pdf.empty() && parsed_line.size() > PMC_ID) {
-            std::string path_xml = find_fulltext_xml(parsed_line[PMC_ID]);
-            if (!path_xml.empty()) {
-                extract_body_text(path_xml, body_text);
-            }
-        } else if (!path_pdf.empty()) {
-            extract_body_text(path_pdf, body_text);
-        }
-        
-        // Process with Python lemmatizer
-        if (!body_text.empty()) {
-            bool success = text_processor.process_text(body_text);
-            if (success) {
-                processed_count++;
-            } else {
-                failed_count++;
-                if (failed_count <= 5) {  // Show first few failures
-                    std::cerr << "Warning: Failed to process paper " << paper_count << "\n";
-                }
-            }
-        } else {
-            skipped_count++;
-        }
-        
-        // progress
-        if (paper_count % 1 == 0) {
-            std::cout << "Progress: " << paper_count << " papers, "
-                      << processed_count << " processed, "
-                      << text_processor.get_lexicon_size() << " unique terms"
-                      << '\n';
-        }
-        
-        // limit for testing 
-        if (paper_count >= 1000) { break; }
-    }
-
-    std::cout << "Total papers read:       " << paper_count << "\n";
-    std::cout << "Successfully processed:  " << processed_count << "\n";
-    std::cout << "Failed:                  " << failed_count << "\n";
-    std::cout << "Skipped (no text):       " << skipped_count << "\n";
-    std::cout << "Unique terms in lexicon: " << text_processor.get_lexicon_size() << "\n";
-    
-    // Print top terms
-    text_processor.print_top_words(50);
-    
-    // Save lexicon to file
-    std::string output_path = "indices/lexicon_cordR1.csv";
-    text_processor.save_lexicon(output_path);
-
-    file.close();
-    return 0;
-}
 
 
