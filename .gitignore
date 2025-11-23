@@ -7,6 +7,9 @@ indices/
 CMakeLists.txt
 .clangd
 
+# python
+python/.venv
+
 # IDEs
 .cache
 .vscode/

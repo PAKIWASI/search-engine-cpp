@@ -12,7 +12,8 @@ private:
 
     static void parse_csv_line(const std::string& line, std::vector<std::string>& parsed_line);
 
-    std::string find_fulltext(std::string& sha);
+    std::string find_fulltext_pdf(std::string& sha);
+    std::string find_fulltext_xml(std::string& pmcid);
 
     static void extract_body_text(const std::string& file_path, std::string& body_text);
 public:
@@ -24,6 +25,7 @@ public:
 
     // main file for parsing
     int metadata_parse();
+    int metadata_parse2();
 };
 
 

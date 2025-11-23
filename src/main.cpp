@@ -7,8 +7,8 @@ int main()
 
     MetadataParser parser(data_path);
 
-    parser.metadata_parse();
 
+    parser.metadata_parse2();
 
     return 0;
 }
