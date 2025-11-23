@@ -1,11 +1,13 @@
 #include "metadata_parser.hpp"
 #include "nlohmann_json.hpp"
+#include "text_processor.hpp"
 
 
 #include <cstdio>
 #include <iostream> 
 #include <fstream>  
 #include <filesystem>
+#include <string>
 
 
 namespace fs = std::filesystem;
@@ -16,10 +18,10 @@ using json = nlohmann::json;
 
 // field name to index mapping
 #define CORD_UID    0
-#define SHA         1
+#define SHA         1   // for pdfs
 #define TITLE       3
+#define PMC_ID      5   // for xmls
 #define ABSTRACT    8
-
 
 
 
@@ -27,12 +29,12 @@ using json = nlohmann::json;
 
 
 // main parser
-
 int MetadataParser::metadata_parse() 
 {
     std::ifstream file(data_path + "/metadata.csv"); 
     if (!file.is_open()) {
-        std::cout << "can't open metadata.csv\n";
+        std::cout << "Error: can't open metadata.csv\n";
+        return -1;
     }
 
     std::string line;
@@ -44,39 +46,99 @@ int MetadataParser::metadata_parse()
     }
 
     std::vector<std::string> parsed_line;
-
     parse_csv_line(line, parsed_line);
 
-    std::cout << "Parsed Header: ";
-    for(const auto& p : parsed_line) {
-        std::cout << p << ' ';
-    }
-    std::cout << '\n';
-
-
-    std::cout << "Reading metadata..." << '\n';
+    // Initialize TextProcessor (python script)
+    TextProcessor text_processor(
+        "python/.venv/bin/python3", 
+        "python/lemmatizer.py"
+    );
     
-    // read all the csv lines
+    std::cout << "\nStarting paper processing...\n";
+    std::cout << "-------------------------------------------\n";
+    
+    int paper_count = 0;
+    int processed_count = 0;
+    int failed_count = 0;
+    int skipped_count = 0;
+    
+    // Read all the csv lines
     while (getline(file, line)) 
     {
-        // parse them into vec of strs
+        paper_count++;
+        
+        // Parse CSV line
         parse_csv_line(line, parsed_line);
 
-        // find the file related to the sha id
+        // Build text for processing
+        std::string body_text;
 
-        std::string path = find_fulltext(parsed_line[SHA]);
-
-        // build file for Text processing
-        std::string body_text = "ABSTRACT:\n";
-        body_text += parsed_line[ABSTRACT];
-        body_text += "\nBODY:\n";
-        extract_body_text(path, body_text); 
-        std::cout << body_text << '\n';
-
-        // TODO: pass to Text Processor
+        // add title
+        if (parsed_line.size() > TITLE && !parsed_line[TITLE].empty())
+        {
+            body_text += parsed_line[TITLE];
+            body_text += "\n\n";
+        }
         
+        // add abstract
+        if (parsed_line.size() > ABSTRACT && !parsed_line[ABSTRACT].empty()) 
+        {
+            body_text += parsed_line[ABSTRACT];
+            body_text += "\n\n";
+        }
+        
+        // try to find PDFs first (about 38k of em)
+        std::string path_pdf = find_fulltext_pdf(parsed_line[SHA]);
+        
+        // if no PDF, try XML (only finding about 800 of em --something wrong)
+        if (path_pdf.empty() && parsed_line.size() > PMC_ID) {
+            std::string path_xml = find_fulltext_xml(parsed_line[PMC_ID]);
+            if (!path_xml.empty()) {
+                extract_body_text(path_xml, body_text);
+            }
+        } else if (!path_pdf.empty()) {
+            extract_body_text(path_pdf, body_text);
+        }
+        
+        // process with python lemmatizer
+        if (!body_text.empty()) {
+            bool success = text_processor.process_text(body_text);
+            if (success) {
+                processed_count++;
+            } else {
+                failed_count++;
+                if (failed_count <= 5) {  // DEBUG: show first few failures
+                    std::cerr << "Warning: Failed to process paper " << paper_count << "\n";
+                }
+            }
+        } else {
+            skipped_count++;
+        }
+        
+        // progress
+        if (paper_count % 1 == 0) {
+            std::cout << "Progress: " << paper_count << " papers, "
+                      << processed_count << " processed, "
+                      << text_processor.get_lexicon_size() << " unique terms"
+                      << '\n';
+        }
+        
+        // limit for testing 
+        if (paper_count >= 20) { break; }
     }
 
+    std::cout << "Total papers read:       " << paper_count << "\n";
+    std::cout << "Successfully processed:  " << processed_count << "\n";
+    std::cout << "Failed:                  " << failed_count << "\n";
+    std::cout << "Skipped (no text):       " << skipped_count << "\n";
+    std::cout << "Unique terms in lexicon: " << text_processor.get_lexicon_size() << "\n";
+    
+    // Print top terms
+    text_processor.print_top_words(50);
+    
+    // Save lexicon to file
+    std::string output_path = "indices/lexicon_cordR1.csv";
+    text_processor.save_lexicon(output_path);
 
     file.close();
     return 0;
@@ -125,6 +187,7 @@ int MetadataParser::metadata_stats()
 
 
     uint32_t found_pdf = 0;
+    uint32_t found_xml = 0;
     uint32_t not_found = 0;
 
 
@@ -143,10 +206,20 @@ int MetadataParser::metadata_stats()
 
         // finding papers
         if (parsed_line.size() == HEADER_SIZE) {
-            std::string path = find_fulltext(parsed_line[SHA]);
+            std::string path = find_fulltext_pdf(parsed_line[SHA]);
             if (path.empty()) {
-                not_found++;
-            } else {
+                
+                // pdf not available, look for xml
+                std::string path_xml = find_fulltext_xml(parsed_line[PMC_ID]);
+                if (!path_xml.empty()) {
+                    found_xml++;            
+                }
+                else {
+                    not_found++;
+                }
+
+            } 
+            else {
                 found_pdf++;
                 if (a == 1000) {
                     std::string body_text;
@@ -157,8 +230,8 @@ int MetadataParser::metadata_stats()
         }
 
 
-        std::cout << "ABSTRACT TEST: \n";
         if (a % 10000 == 0) {
+            std::cout << "ABSTRACT TEST: \n";
             std::cout << parsed_line[ABSTRACT] << "\n\n";
         }
         a++;
@@ -176,6 +249,7 @@ int MetadataParser::metadata_stats()
     std::cout << '\n';
 
     std::cout << "Found pdf: " << found_pdf << '\n';
+    std::cout << "Found xml: " << found_xml << '\n';
     std::cout << "Not Found: " << not_found << '\n';
 
 
@@ -210,7 +284,7 @@ void MetadataParser::parse_csv_line(const std::string& line, std::vector<std::st
 }
 
 
-std::string MetadataParser::find_fulltext(std::string& sha)
+std::string MetadataParser::find_fulltext_pdf(std::string& sha)
 {
     if (sha.empty()) { return ""; }
     
@@ -241,6 +315,27 @@ std::string MetadataParser::find_fulltext(std::string& sha)
     return "";
 }
 
+std::string MetadataParser::find_fulltext_xml(std::string& pmcid)
+{
+    if (pmcid.empty()) { return ""; }
+    
+    // Search PDF JSONs
+    std::vector<std::string> xml_search_paths = {
+        data_path + "/comm_use_subset/pmc_json/" + pmcid + ".xml.json",
+        data_path + "/noncomm_use_subset/pmc_json/" + pmcid + ".xml.json",
+        data_path + "/custom_license/pmc_json/" + pmcid + ".xml.json",
+        //data_path + "/biorxiv_medrxiv/pmc_json/" + pmcid + ".json"
+    };
+    
+    for (const auto& path : xml_search_paths) {
+        if (fs::exists(path)) {
+            return path;
+        }
+    }
+    
+    return "";
+}
+
 void MetadataParser::extract_body_text(const std::string& file_path, std::string& body_text) 
 {
     if (file_path.empty()) { return; }
@@ -263,5 +358,8 @@ void MetadataParser::extract_body_text(const std::string& file_path, std::string
         return;
     }
 }
+
+
+
 
 
