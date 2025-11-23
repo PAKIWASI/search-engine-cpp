@@ -7,7 +7,7 @@ int main()
 
     MetadataParser parser(data_path);
 
-    parser.metadata_stats();
+    parser.metadata_parse();
 
 
     return 0;

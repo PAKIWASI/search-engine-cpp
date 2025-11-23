@@ -2,12 +2,10 @@
 #include "nlohmann_json.hpp"
 
 
-#include <cstdint>
 #include <cstdio>
 #include <iostream> 
 #include <fstream>  
 #include <filesystem>
-#include <string>
 
 
 namespace fs = std::filesystem;
@@ -20,10 +18,12 @@ using json = nlohmann::json;
 #define CORD_UID    0
 #define SHA         1
 #define TITLE       3
+#define ABSTRACT    8
 
 
 
 
+// Public funcs
 
 
 int MetadataParser::metadata_stats()
@@ -70,6 +70,7 @@ int MetadataParser::metadata_stats()
     uint32_t not_found = 0;
 
 
+    int a = 1;
     while (getline(file, line)) 
     {
         parse_csv_line(line, parsed_line);
@@ -89,8 +90,21 @@ int MetadataParser::metadata_stats()
                 not_found++;
             } else {
                 found_pdf++;
+                if (a == 1000) {
+                    std::string body_text;
+                    extract_body_text(path, body_text);
+                    std::cout << "BODY TEST: \n\n" << body_text << "\n\n";
+                }
             }
         }
+
+
+        std::cout << "ABSTRACT TEST: \n";
+        if (a % 10000 == 0) {
+            std::cout << parsed_line[ABSTRACT] << "\n\n";
+        }
+        a++;
+
     }
     std::cout << "No of papers: " << no_papers << '\n';
     std::cout << "No of pdfs: " << no_pdf << '\n';
@@ -106,11 +120,13 @@ int MetadataParser::metadata_stats()
     std::cout << "Found pdf: " << found_pdf << '\n';
     std::cout << "Not Found: " << not_found << '\n';
 
+
     file.close();
     return 0;
 }
 
 
+// main parser
 
 int MetadataParser::metadata_parse() 
 {
@@ -137,15 +153,29 @@ int MetadataParser::metadata_parse()
     std::cout << '\n';
 
 
-    std::cout << "Loading metadata..." << '\n';
+    std::cout << "Reading metadata..." << '\n';
     
+    // read all the csv lines
+    int a = 1;
     while (getline(file, line)) 
     {
+        // parse them into vec of strs
         parse_csv_line(line, parsed_line);
 
-        // TODO: join the full text on sha id, process text and build lexicon, save as csv
-        std::string path = find_fulltext(parsed_line[SHA]);
-        
+        // find the file related to the sha id
+
+        if (a % 10000 == 0) {
+            std::string path = find_fulltext(parsed_line[SHA]);
+
+            // build file for Text processing
+            std::string body_text = "ABSTRACT:\n";
+            body_text += parsed_line[ABSTRACT];
+            body_text += "\nBODY:\n";
+            extract_body_text(path, body_text); 
+            
+            std::cout << body_text << '\n';
+        }
+        a++;
     }
 
 
@@ -212,7 +242,7 @@ std::string MetadataParser::find_fulltext(std::string& sha)
     return "";
 }
 
-void extract_body_text(const std::string& file_path, std::string& body_text) 
+void MetadataParser::extract_body_text(const std::string& file_path, std::string& body_text) 
 {
     try {
         std::ifstream file(file_path);
@@ -233,3 +263,5 @@ void extract_body_text(const std::string& file_path, std::string& body_text)
         return;
     }
 }
+
+

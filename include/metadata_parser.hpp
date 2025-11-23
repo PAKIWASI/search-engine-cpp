@@ -19,8 +19,11 @@ public:
     explicit MetadataParser(const std::string& data_path) : data_path(data_path) {}
 
 
+    // get paper stats + testing (retarded af design)
     int metadata_stats();
 
     // main file for parsing
     int metadata_parse();
 };
+
+
