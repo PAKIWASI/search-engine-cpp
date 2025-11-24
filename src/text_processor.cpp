@@ -15,7 +15,7 @@ TextProcessor::TextProcessor(const std::string& python_path,
 {
 }
 
-bool TextProcessor::call_python_lemmatizer_with_file(const std::string& text,
+bool TextProcessor::call_python_lemmatizer_with_text(const std::string& text,
                                                       std::unordered_map<std::string, uint32_t>& temp_lexicon)
 {
     // TODO: check if we can pass a string directly to python rather than an intermediate file
@@ -118,7 +118,7 @@ bool TextProcessor::process_text(const std::string& text)
     
     std::unordered_map<std::string, uint32_t> temp_lexicon;
     
-    bool success = call_python_lemmatizer_with_file(text, temp_lexicon);
+    bool success = call_python_lemmatizer_with_text(text, temp_lexicon);
     
     if (success) {
         merge_lexicon(temp_lexicon);
@@ -149,10 +149,10 @@ void TextProcessor::save_lexicon(const std::string& output_path)
               [](const auto& a, const auto& b) { return a.second > b.second; });
     
     // Write to file
-    uint32_t docid = 0;
-    file << "word,docid,frequency\n";
+    uint32_t wordid = 0;
+    file << "word,wordid,frequency\n";
     for (const auto& [word, freq] : sorted_lexicon) {
-        file << word << "," << docid++ << "," << freq << '\n';
+        file << word << "," << wordid++ << "," << freq << '\n';
     }
     
     file.close();

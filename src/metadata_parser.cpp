@@ -51,11 +51,10 @@ int MetadataParser::metadata_parse()
     // Initialize TextProcessor (python script)
     TextProcessor text_processor(
         "python/.venv/bin/python3", 
-        "python/lemmatizer.py"
+        "python/lemmatizer_2.py"
     );
     
     std::cout << "\nStarting paper processing...\n";
-    std::cout << "-------------------------------------------\n";
     
     int paper_count = 0;
     int processed_count = 0;

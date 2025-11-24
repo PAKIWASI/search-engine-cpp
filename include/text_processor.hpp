@@ -17,7 +17,7 @@ private:
     std::string python_interpreter;
     
     // Helper functions
-    bool call_python_lemmatizer_with_file(const std::string& text,
+    bool call_python_lemmatizer_with_text(const std::string& text,
                                           std::unordered_map<std::string, uint32_t>& temp_lexicon);
     
     void merge_lexicon(const std::unordered_map<std::string, uint32_t>& temp_lexicon);
