@@ -13,8 +13,8 @@ uint32_t Lexicon::add_word(const std::string& word, uint32_t frequency)
 {
     auto it = data.find(word);
     if (it != data.end()) {
-        it->second.second += frequency;   // word exists, update frequency
-        return it->second.first;
+        it->second.frequency += frequency;   // word exists, update frequency
+        return it->second.word_id;
     } else {
         uint32_t word_id = next_word_id++;  // New word, assign new ID
         data[word] = {word_id, frequency};
@@ -22,8 +22,7 @@ uint32_t Lexicon::add_word(const std::string& word, uint32_t frequency)
     }
 }
 
-const std::pair<uint32_t, uint32_t>* 
-            Lexicon::get_word_info(const std::string& word) const 
+const WordData* Lexicon::get_word_info(const std::string& word) const 
 {
     auto it = data.find(word);
     if (it != data.end()) {
@@ -36,7 +35,7 @@ uint32_t Lexicon::get_word_id(const std::string& word) const
 {
     auto it = data.find(word);
     if (it != data.end()) {
-        return it->second.first;
+        return it->second.word_id;
     }
     return UINT32_MAX;      // return max as not found
 }
@@ -45,7 +44,7 @@ uint32_t Lexicon::get_frequency(const std::string& word) const
 {
     auto it = data.find(word);
     if (it != data.end()) {
-        return it->second.second;
+        return it->second.frequency;
     }
     return 0;
 }
@@ -55,20 +54,20 @@ bool Lexicon::contains(const std::string& word) const
     return data.contains(word);
 }
 
-void Lexicon::merge(const std::unordered_map<std::string, std::pair<uint32_t, uint32_t>>& temp_lex) 
+void Lexicon::merge(const std::unordered_map<std::string, WordData>& temp_lex) 
 {
     for (const auto& [word, pair] : temp_lex) 
     {
-        add_word(word, pair.second);
+        add_word(word, pair.frequency);
     }
 }
 
-void Lexicon::update_ids(std::unordered_map<std::string, std::pair<uint32_t, uint32_t>>& temp_lex) const 
+void Lexicon::update_ids(std::unordered_map<std::string, WordData>& temp_lex) const 
 {
     for (auto& [word, pair] : temp_lex) {
         auto it = data.find(word);
         if (it != data.end()) {
-            pair.first = it->second.first;  // update with actual ID
+            pair.word_id = it->second.word_id;  // update with actual ID
         }
     }
 }
@@ -82,18 +81,18 @@ void Lexicon::save_to_file(const std::string& output_path) const
     }
     
     // convert to vector for sorting (can't sort the hashmap(wtf?))
-    std::vector<std::pair<std::string, std::pair<uint32_t, uint32_t>>> sorted_data(data.begin(), data.end());
+    std::vector<std::pair<std::string, WordData>> sorted_data(data.begin(), data.end());
     
     // Sort by frequency
     std::sort(sorted_data.begin(), sorted_data.end(),
               [](const auto& a, const auto& b) { 
-                  return a.second.second > b.second.second; 
+                  return a.second.frequency > b.second.frequency; 
               });
     
     // write to file
     file << "word,wordid,frequency\n";
     for (const auto& [word, pair] : sorted_data) {
-        file << word << "," << pair.first << "," << pair.second << '\n';
+        file << word << "," << pair.word_id << "," << pair.frequency << '\n';
     }
     
     file.close();
@@ -156,10 +155,10 @@ bool Lexicon::load_from_file(const std::string& input_path)
 
 void Lexicon::print_top_words(int n) const 
 {
-    std::vector<std::pair<std::string, std::pair<uint32_t, uint32_t>>> sorted_data(data.begin(), data.end());
+    std::vector<std::pair<std::string, WordData>> sorted_data(data.begin(), data.end());
     std::sort(sorted_data.begin(), sorted_data.end(),
               [](const auto& a, const auto& b) { 
-                  return a.second.second > b.second.second; 
+                  return a.second.frequency > b.second.frequency; 
               });
     
     std::cout << "\n  Top " << n << " Most Frequent Terms:\n";
@@ -168,8 +167,8 @@ void Lexicon::print_top_words(int n) const
     {
         std::cout << "  " << std::setw(4) << (i + 1) << ". "
                   << std::setw(20) << std::left << sorted_data[i].first 
-                  << " (ID:" << std::setw(6) << sorted_data[i].second.first << ")"
-                  << " freq: " << std::setw(8) << std::right << sorted_data[i].second.second << '\n';
+                  << " (ID:" << std::setw(6) << sorted_data[i].second.word_id << ")"
+                  << " freq: " << std::setw(8) << std::right << sorted_data[i].second.frequency << '\n';
     }
 }
 

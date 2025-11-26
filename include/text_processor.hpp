@@ -17,7 +17,7 @@ private:
     
     // helper function to call python lemmatizer
     bool call_python_lemmatizer_with_text( std::ofstream& lemma_input, 
-        std::unordered_map<std::string, std::pair<uint32_t, uint32_t>>& temp_lex);
+        std::unordered_map<std::string, WordData>& temp_lex);
 
 public:
     explicit TextProcessor( Lexicon& lex,
@@ -26,7 +26,7 @@ public:
     
     // process text: pass to Python lemmatizer and update lexicon
     bool lemmatize_text( std::ofstream& full_text, 
-        std::unordered_map<std::string, std::pair<uint32_t, uint32_t>>& temp_lex);
+        std::unordered_map<std::string, WordData>& temp_lex);
     
     size_t get_lexicon_size() const { return lexicon.size(); }
 };

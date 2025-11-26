@@ -16,7 +16,7 @@ TextProcessor::TextProcessor( Lexicon& lex,
 }
 
 bool TextProcessor::call_python_lemmatizer_with_text( std::ofstream& lemma_input,
-                        std::unordered_map<std::string, std::pair<uint32_t, uint32_t>>& temp_lex)
+                        std::unordered_map<std::string, WordData>& temp_lex)
 {
     temp_lex.clear();
     
@@ -99,7 +99,7 @@ bool TextProcessor::call_python_lemmatizer_with_text( std::ofstream& lemma_input
 
 
 bool TextProcessor::lemmatize_text( std::ofstream& full_text, 
-                    std::unordered_map<std::string, std::pair<uint32_t, uint32_t>>& temp_lex) 
+                    std::unordered_map<std::string, WordData>& temp_lex) 
 {
     if (!full_text.is_open()) {
         return true;

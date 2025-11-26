@@ -7,7 +7,7 @@
 
 
 uint32_t ForwardIndex::add_document(const std::string& cord_uid,
-                const std::unordered_map<std::string, std::pair<uint32_t, uint32_t>>& temp_lex) 
+                const std::unordered_map<std::string, WordData>& temp_lex) 
 {
     uint32_t doc_id = next_doc_id++;
     
@@ -15,7 +15,7 @@ uint32_t ForwardIndex::add_document(const std::string& cord_uid,
     doc_metadata[doc_id] = cord_uid;
     
     // Build term frequency vector for this document
-    std::vector<TermFrequency> terms;
+    std::vector<WordData> terms;
     terms.reserve(temp_lex.size());
     
     for (const auto& [word, pair] : temp_lex) {
@@ -26,7 +26,7 @@ uint32_t ForwardIndex::add_document(const std::string& cord_uid,
     
     // Sort by word_id for better cache locality during lookups
     std::sort(terms.begin(), terms.end(), 
-              [](const TermFrequency& a, const TermFrequency& b) {
+              [](const WordData& a, const WordData& b) {
                   return a.word_id < b.word_id;
               });
     
@@ -35,7 +35,7 @@ uint32_t ForwardIndex::add_document(const std::string& cord_uid,
     return doc_id;
 }
 
-const std::vector<TermFrequency>* ForwardIndex::get_document_terms(uint32_t doc_id) const 
+const std::vector<WordData>* ForwardIndex::get_document_terms(uint32_t doc_id) const 
 {
     auto it = index.find(doc_id);
     if (it != index.end()) {
@@ -83,7 +83,7 @@ void ForwardIndex::save_to_file(const std::string& output_path) const
         
         // Write all terms
         file.write(reinterpret_cast<const char*>(terms.data()), 
-                  term_count * sizeof(TermFrequency));
+                  term_count * sizeof(WordData));
     }
     
     file.close();
@@ -123,9 +123,9 @@ bool ForwardIndex::load_from_file(const std::string& input_path)
         file.read(reinterpret_cast<char*>(&term_count), sizeof(term_count));
         
         // Read all terms
-        std::vector<TermFrequency> terms(term_count);
+        std::vector<WordData> terms(term_count);
         file.read(reinterpret_cast<char*>(terms.data()), 
-                 term_count * sizeof(TermFrequency));
+                 term_count * sizeof(WordData));
         
         index[doc_id] = std::move(terms);
         

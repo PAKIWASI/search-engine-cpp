@@ -72,14 +72,15 @@ int MetadataParser::metadata_parse()
     {
         paper_count++;
         
-        // Parse CSV line
+        // parse csv line
         parse_csv_line(line, parsed_line);
 
-        // Get CORD_UID for this paper
+        // get cord_uid for this paper
         std::string cord_uid = parsed_line.size() > CORD_UID ? 
                                parsed_line[CORD_UID] : "";
 
-        // Build text for processing as a file (will be passed to python)
+
+        // build text for processing as a file (will be passed to python)
         std::ofstream full_text("indices/lemma_input.txt");
         if (!full_text.is_open()) {
             std::cerr << "can't open full text file\n";
@@ -116,7 +117,7 @@ int MetadataParser::metadata_parse()
         if (full_text.is_open()) { // valid papers
 
             // lemmatize text
-            std::unordered_map<std::string, std::pair<uint32_t, uint32_t>> temp_lex;
+            std::unordered_map<std::string, WordData> temp_lex;
             bool success_lemma = text_processor.lemmatize_text(full_text, temp_lex);
 
             if (success_lemma) {

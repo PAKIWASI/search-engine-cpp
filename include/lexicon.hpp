@@ -3,12 +3,15 @@
 #include <string>
 #include <unordered_map>
 #include <cstdint>
-#include <utility>
+
+#include "word_data.hpp"
+
+
 
 class Lexicon {
 private:
     // word -> (word_id, frequency)
-    std::unordered_map<std::string, std::pair<uint32_t, uint32_t>> data;
+    std::unordered_map<std::string, WordData> data;
     uint32_t next_word_id = 0;
 
 public:
@@ -18,8 +21,8 @@ public:
     // Returns the word_id assigned to this word
     uint32_t add_word(const std::string& word, uint32_t frequency = 1);
     
-    // Get word_id for a word 
-    const std::pair<uint32_t, uint32_t>* get_word_info(const std::string& word) const;
+    // Get word_data for a word 
+    const WordData* get_word_info(const std::string& word) const;
     
     // Get word_id only 
     uint32_t get_word_id(const std::string& word) const;
@@ -34,15 +37,15 @@ public:
     size_t size() const { return data.size(); }
     
     // Get all data (for iteration)
-    const std::unordered_map<std::string, std::pair<uint32_t, uint32_t>>& get_data() const {
+    const std::unordered_map<std::string, WordData>& get_data() const {
         return data;
     }
     
     // Merge another lexicon or temp lexicon into this one
-    void merge(const std::unordered_map<std::string, std::pair<uint32_t, uint32_t>>& temp_lex);
+    void merge(const std::unordered_map<std::string, WordData>& temp_lex);
     
     // Update temp_lex with actual word IDs from this lexicon
-    void update_ids(std::unordered_map<std::string, std::pair<uint32_t, uint32_t>>& temp_lex) const;
+    void update_ids(std::unordered_map<std::string, WordData>& temp_lex) const;
     
     // Save lexicon to CSV file
     void save_to_file(const std::string& output_path) const;
