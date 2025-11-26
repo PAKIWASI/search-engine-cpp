@@ -1,122 +1,250 @@
 #include "text_processor.hpp"
 
-#include <fstream>
 #include <iostream>
-#include <cstdio>
-#include <cstdlib>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <signal.h>
+#include <cstring>
 
 
-TextProcessor::TextProcessor( Lexicon& lex,
+TextProcessor::TextProcessor(Lexicon& lex,
     const std::string& python_path, 
     const std::string& script_path)
-    : lexicon(lex), 
-      python_script_path(script_path), 
-      python_interpreter(python_path) 
+    : lexicon(lex), python_in(nullptr), python_out(nullptr), 
+      python_pid(-1), daemon_active(false)
 {
+    if (!start_daemon(python_path, script_path)) {
+        std::cerr << "failed to start python daemon\n";
+    }
 }
 
-bool TextProcessor::call_python_lemmatizer_with_text( std::ofstream& lemma_input,
-                        std::unordered_map<std::string, WordData>& temp_lex)
+TextProcessor::~TextProcessor() 
+{
+    stop_daemon();
+}
+
+bool TextProcessor::start_daemon(const std::string& python_path,
+                                 const std::string& script_path) 
+{
+            // we are using pipes for persistant communication
+
+    int pipe_in[2];   // parent writes, child reads (stdin for python)
+    int pipe_out[2];  // child writes, parent reads (stdout from python)
+    
+    if (pipe(pipe_in) == -1 || pipe(pipe_out) == -1) {
+        std::cerr << "Failed to create pipes\n";
+        return false;
+    }
+    
+    python_pid = fork(); 
+    
+    if (python_pid == -1) {
+        std::cerr << "Failed to fork\n"; 
+        close(pipe_in[0]); close(pipe_in[1]);
+        close(pipe_out[0]); close(pipe_out[1]);
+        return false;
+    }
+    
+    if (python_pid == 0) 
+    {
+        // CHILD PROCESS 
+        close(pipe_in[1]);   // close write end of input pipe
+        close(pipe_out[0]);  // close read end of output pipe
+        
+        // redirect stdin to pipe_in[0]
+        if (dup2(pipe_in[0], STDIN_FILENO) == -1) {
+            std::cerr << "Failed to redirect stdin\n";
+            exit(1);
+        }
+        
+        // redirect stdout to pipe_out[1]
+        if (dup2(pipe_out[1], STDOUT_FILENO) == -1) {
+            std::cerr << "Failed to redirect stdout\n";
+            exit(1);
+        }
+        
+        close(pipe_in[0]);
+        close(pipe_out[1]);
+        
+        // execute python daemon
+        execlp(python_path.c_str(), python_path.c_str(), 
+               script_path.c_str(), nullptr);
+        
+        // If execlp fails, we only reach here
+        std::cerr << "Failed to execute Python\n";
+        exit(1);
+    }
+    
+    // PARENT PROCESS
+    close(pipe_in[0]);   // close read end of input pipe
+    close(pipe_out[1]);  // close write end of output pipe
+    
+    // convert file descriptors to FILE* for easier I/O  (ai propossed solution, idk it works or not)
+    python_in = fdopen(pipe_in[1], "w");
+    python_out = fdopen(pipe_out[0], "r");
+    
+    if ((python_in == nullptr) || (python_out == nullptr)) {
+        std::cerr << "Failed to open pipe streams\n";
+        stop_daemon();
+        return false;
+    }
+    
+    // Disable buffering for immediate communication
+    setbuf(python_in, nullptr);
+    setbuf(python_out, nullptr);
+    
+    daemon_active = true;
+    std::cout << "Python daemon started (PID: " << python_pid << ")\n";
+    return true;
+}
+
+void TextProcessor::stop_daemon() 
+{
+    if (!daemon_active) { return; }
+    
+    // Signal daemon to shutdown
+    if (python_in != nullptr) {
+        fprintf(python_in, "0\n");
+        fflush(python_in);
+        fclose(python_in);
+        python_in = nullptr;
+    }
+    
+    if (python_out != nullptr) {
+        fclose(python_out);
+        python_out = nullptr;
+    }
+    
+    // terminate python process
+    if (python_pid > 0) {
+        int status;
+        
+        // wait briefly for graceful shutdown (important, apparently)
+        pid_t result = waitpid(python_pid, &status, WNOHANG);
+        
+        if (result == 0) {
+            // process still running, send SIGTERM
+            kill(python_pid, SIGTERM);
+            
+            // wait up to 1 second
+            for (int i = 0; i < 10; i++) {
+                result = waitpid(python_pid, &status, WNOHANG);
+                if (result != 0) { break; }
+                usleep(100000); // 100ms
+            }
+            
+            // force kill if still alive
+            if (result == 0) {
+                kill(python_pid, SIGKILL);
+                waitpid(python_pid, &status, 0);
+            }
+        }
+        
+        python_pid = -1;
+    }
+    
+    daemon_active = false;
+    std::cout << "Python daemon stopped\n";
+}
+
+
+bool TextProcessor::process_with_daemon(const std::string& text,
+                    std::unordered_map<std::string, WordData>& temp_lex) 
 {
     temp_lex.clear();
     
-    // Create temporary files
-    std::string temp_input = "indices/lemma_input.txt";     // already created and has full_text
-    std::string temp_output = "indices/lemma_output.csv";
-    
-    lemma_input.close();
-    
-    // Build command - redirect stderr to separate file to not interfere with CSV
-    std::string temp_error = "indices/lemma_error.log";
-    std::string command = python_interpreter + " " + python_script_path + 
-                         " < " + temp_input + " > " + temp_output + 
-                         " 2> " + temp_error;
-    
-    // Execute Python script
-    int status = system(command.c_str());
-    
-    if (status != 0) {
-        std::cerr << "Error: Python script failed with status " << status << "\n";
-        
-        // Cleanup
-        remove(temp_input.c_str());
-        remove(temp_output.c_str());
+    if (!daemon_active || (python_in == nullptr) || (python_out == nullptr)) {
+        std::cerr << "Python daemon not active\n";
         return false;
     }
     
-
-                // READ CSV
-    std::ifstream output_file(temp_output);
-    if (!output_file.is_open()) {
-        std::cerr << "Error: Could not read temp output file\n";
-        remove(temp_input.c_str());
-        remove(temp_output.c_str());
-        remove(temp_error.c_str());
-        return false;
-    }
+    std::cout << "Sending text to daemon\n";
     
-    std::string line;
-    bool first_line = true; // for header
+    // send text as a single line (text is a line with space b/w sections)
     
-    while (std::getline(output_file, line)) 
+    fprintf(python_in, "%s\n", text.c_str());
+    fflush(python_in);
+    
+    // read CSV output
+    char line[4096];
+    bool first_line = true;
+    int line_count = 0;
+    
+    std::cout << "Waiting for daemon response...\n";
+    
+    // get the response
+    while (fgets(line, sizeof(line), python_out) != nullptr) 
     {
-        // skip header
+        line_count++;
+        
+        // remove trailing newline
+        size_t len = strlen(line);
+        if (len > 0 && line[len-1] == '\n') {
+            line[len-1] = '\0';
+            len--;
+        }
+        
+        std::string line_str(line);
+        std::cout << "Received line " << line_count << ": " << line_str << "\n";
+        
+        // check for end marker
+        if (line_str == "END_OF_DOCUMENT") {
+            std::cout << "END_OF_DOCUMENT reached\n";
+            break;
+        }
+        
+        // skip header line
         if (first_line) {
             first_line = false;
             continue;
         }
         
-        // skip empty lines
-        if (line.empty()) { continue; }
+        if (line_str.empty()) { continue; }
         
-        // parse CSV line: word,frequency
-        size_t comma_pos = line.find(',');
+        // parse CSV: word,frequency
+        size_t comma_pos = line_str.find(',');
         if (comma_pos != std::string::npos) {
-            std::string word = line.substr(0, comma_pos);
-            std::string freq_str = line.substr(comma_pos + 1);
+            std::string word = line_str.substr(0, comma_pos);
+            std::string freq_str = line_str.substr(comma_pos + 1);
             
             try {
                 uint32_t freq = std::stoul(freq_str);
-                // store word with frequency, id will be assigned during merge
-                temp_lex[word] = {0, freq};  // id=0 as placeholder
+                temp_lex[word] = {0, freq};
+                std::cout << "Parsed word: " << word << " freq: " << freq << "\n";
             } catch (const std::exception& e) {
-                std::cerr << "Warning: Could not parse frequency for word: " 
-                         << word << "\n";
+                std::cerr << "Parse error for word '" << word 
+                         << "': " << e.what() << '\n';
             }
         }
     }
     
-    output_file.close();
-    
-    // Cleanup temp files
-    remove(temp_input.c_str());
-    remove(temp_output.c_str());
-    remove(temp_error.c_str());
-    
+    std::cout << "Processed " << temp_lex.size() << " terms\n";
     return !temp_lex.empty();
 }
 
 
-
-bool TextProcessor::lemmatize_text( std::ofstream& full_text, 
+bool TextProcessor::lemmatize_text(const std::string& text,
                     std::unordered_map<std::string, WordData>& temp_lex) 
 {
-    if (!full_text.is_open()) {
+
+    if (text.empty()) {
+        temp_lex.clear();
         return true;
     }
     
-    // Call Python lemmatizer to get temp_lex
-    bool success = call_python_lemmatizer_with_text(full_text, temp_lex);
+    // process through daemon
+    bool success = process_with_daemon(text, temp_lex);
     
-    if (success) {
-        // Merge temp_lex into global lexicon
+    if (success && !temp_lex.empty()) {
+        // merge temp lexicon with main lexicon
         lexicon.merge(temp_lex);
         
-        // Update temp_lex with actual IDs from global lexicon
+        // update temp_lex with actual word ids from main lex
         lexicon.update_ids(temp_lex);
     }
     
     return success;
 }
+
 
 

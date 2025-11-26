@@ -11,7 +11,6 @@
 #include <filesystem>
 #include <string>
 #include <unordered_map>
-#include <utility>
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
@@ -53,7 +52,7 @@ int MetadataParser::metadata_parse()
     TextProcessor text_processor(
         lexicon,
         "python/.venv/bin/python3", 
-        "python/lemmatizer_2.py"
+        "python/lemmatizer_daemon.py"
     );
     
     // Initialize Forward Index
@@ -80,42 +79,38 @@ int MetadataParser::metadata_parse()
                                parsed_line[CORD_UID] : "";
 
 
-        // build text for processing as a file (will be passed to python)
-        std::ofstream full_text("indices/lemma_input.txt");
-        if (!full_text.is_open()) {
-            std::cerr << "can't open full text file\n";
-            continue;
-        }
+        // build text as a string
+        std::string full_text;
 
         // add title
         if (parsed_line.size() > TITLE && !parsed_line[TITLE].empty())
         {
-            full_text << parsed_line[TITLE];
-            full_text << '\n';
+            full_text += parsed_line[TITLE];
+            full_text += ' ';
         }
-        
+
         // add abstract
         if (parsed_line.size() > ABSTRACT && !parsed_line[ABSTRACT].empty()) 
         {
-            full_text << parsed_line[ABSTRACT];
-            full_text << '\n';
+            full_text += parsed_line[ABSTRACT];
+            full_text += ' ';
         }
         
-        // try to find PDFs first (about 38k of em)
+        // try to find pdfs first (about 38k of em)
         std::string path_pdf = find_fulltext_pdf(parsed_line[SHA]);
-        
-        // if no PDF, try XML (only finding about 800 of em)
+
+        // if no pdf, try xml (only finding about 800 of em, something wrong with pmcid?)
         if (path_pdf.empty() && parsed_line.size() > PMC_ID) {
             std::string path_xml = find_fulltext_xml(parsed_line[PMC_ID]);
             if (!path_xml.empty()) {
-                extract_body_text_tofile(path_xml, full_text);
+                extract_body_text(path_xml, full_text);
             }
         } else if (!path_pdf.empty()) {
-            extract_body_text_tofile(path_pdf, full_text);
+            extract_body_text(path_pdf, full_text);
         }
-        
-        if (full_text.is_open()) { // valid papers
 
+
+        if (!full_text.empty()) { // valid papers
             // lemmatize text
             std::unordered_map<std::string, WordData> temp_lex;
             bool success_lemma = text_processor.lemmatize_text(full_text, temp_lex);
@@ -146,7 +141,7 @@ int MetadataParser::metadata_parse()
         }
         
         // limit for testing 
-        if (paper_count >= 20) { break; }
+        if (paper_count >= 100) { break; }
     }
 
     std::cout << "\nPROCESSING SUMMARY\n";
@@ -389,6 +384,7 @@ void MetadataParser::extract_body_text(const std::string& file_path, std::string
     }
 }
 
+// TODO: remove this
 void MetadataParser::extract_body_text_tofile(const std::string& file_path, std::ofstream& output_file) 
 {
     if (file_path.empty()) { return; }

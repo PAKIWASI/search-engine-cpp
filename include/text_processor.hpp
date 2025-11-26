@@ -1,34 +1,44 @@
 #pragma once
 
 #include "lexicon.hpp"
-#include <fstream>
 #include <string>
 #include <unordered_map>
-#include <cstdint>
-#include <utility>
+#include <cstdio>
 
 class TextProcessor {
 private:
-    Lexicon& lexicon;       // main lex
+    Lexicon& lexicon;
     
-    const std::string python_script_path;   // path to python script
+    // python daemon process
+    FILE* python_in;    // write to python
+    FILE* python_out;   // read from python
+    pid_t python_pid;   // process id of python
+    bool daemon_active; // check if daemon is active
     
-    std::string python_interpreter; // path to python interpreter
+    // start the python daemon
+    bool start_daemon(const std::string& python_path, 
+                     const std::string& script_path);
     
-    // helper function to call python lemmatizer
-    bool call_python_lemmatizer_with_text( std::ofstream& lemma_input, 
-        std::unordered_map<std::string, WordData>& temp_lex);
+    // stop the python daemon
+    void stop_daemon();
+    
+    // send text to daemon and read results
+    bool process_with_daemon(const std::string& text,
+                            std::unordered_map<std::string, WordData>& temp_lex);
 
 public:
-    explicit TextProcessor( Lexicon& lex,
+    explicit TextProcessor(Lexicon& lex,
         const std::string& python_path = "python/.venv/bin/python3",
-        const std::string& script_path = "python/lemmatizer_2.py");
+        const std::string& script_path = "python/lemmatizer_daemon.py");
     
-    // process text: pass to Python lemmatizer and update lexicon
-    bool lemmatize_text( std::ofstream& full_text, 
-        std::unordered_map<std::string, WordData>& temp_lex);
+    ~TextProcessor();
+    
+    // Process text through daemon
+    bool lemmatize_text(const std::string& text, 
+                       std::unordered_map<std::string, WordData>& temp_lex);
     
     size_t get_lexicon_size() const { return lexicon.size(); }
 };
+
 
 

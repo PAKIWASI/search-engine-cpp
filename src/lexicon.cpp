@@ -16,7 +16,7 @@ uint32_t Lexicon::add_word(const std::string& word, uint32_t frequency)
         it->second.frequency += frequency;   // word exists, update frequency
         return it->second.word_id;
     } else {
-        uint32_t word_id = next_word_id++;  // New word, assign new ID
+        uint32_t word_id = next_word_id++;  // new word, assign new id
         data[word] = {word_id, frequency};
         return word_id;
     }
