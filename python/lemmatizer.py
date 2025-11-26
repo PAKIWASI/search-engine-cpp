@@ -7,8 +7,7 @@ from collections import Counter
 try:
     nlp = spacy.load("en_core_web_sm")
 except OSError:
-    print("ERROR: spaCy model not found!", file=sys.stderr)
-    print("Install with: python -m spacy download en_core_web_sm", file=sys.stderr)
+    print("no spacy", file=sys.stderr)
     sys.exit(1)
 
 # Medical/biomedical terms to preserve (keep original form) # AI gen
