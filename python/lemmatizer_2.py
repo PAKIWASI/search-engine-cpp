@@ -3,6 +3,7 @@ import spacy
 import re
 from collections import Counter
 
+            #LEMMATIZER WITH BETTER PROCESSING OF EDGE CASES FUCK YEAH
 
 try:
     nlp = spacy.load("en_core_web_sm")

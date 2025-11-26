@@ -1,18 +1,20 @@
 #include "metadata_parser.hpp"
 #include "nlohmann_json.hpp"
 #include "text_processor.hpp"
+#include "lexicon.hpp"
+#include "forward_index.hpp"
 
-
+#include <cstdint>
 #include <cstdio>
 #include <iostream> 
 #include <fstream>  
 #include <filesystem>
 #include <string>
-
+#include <unordered_map>
+#include <utility>
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-
 
 #define HEADER_SIZE 18
 
@@ -22,10 +24,6 @@ using json = nlohmann::json;
 #define TITLE       3
 #define PMC_ID      5   // for xmls
 #define ABSTRACT    8
-
-
-
-// Public funcs
 
 
 // main parser
@@ -48,19 +46,27 @@ int MetadataParser::metadata_parse()
     std::vector<std::string> parsed_line;
     parse_csv_line(line, parsed_line);
 
-    // Initialize TextProcessor (python script)
+    // Initialize Lexicon
+    Lexicon lexicon;
+    
+    // Initialize TextProcessor with reference to lexicon
     TextProcessor text_processor(
+        lexicon,
         "python/.venv/bin/python3", 
         "python/lemmatizer_2.py"
     );
     
+    // Initialize Forward Index
+    ForwardIndex forward_index;
+    
     std::cout << "\nStarting paper processing...\n";
     
     int paper_count = 0;
-    int processed_count = 0;
+    int lemmatize_count = 0;
     int failed_count = 0;
     int skipped_count = 0;
     
+
     // Read all the csv lines
     while (getline(file, line)) 
     {
@@ -69,45 +75,61 @@ int MetadataParser::metadata_parse()
         // Parse CSV line
         parse_csv_line(line, parsed_line);
 
-        // Build text for processing
-        std::string body_text;
+        // Get CORD_UID for this paper
+        std::string cord_uid = parsed_line.size() > CORD_UID ? 
+                               parsed_line[CORD_UID] : "";
+
+        // Build text for processing as a file (will be passed to python)
+        std::ofstream full_text("indices/lemma_input.txt");
+        if (!full_text.is_open()) {
+            std::cerr << "can't open full text file\n";
+            continue;
+        }
 
         // add title
         if (parsed_line.size() > TITLE && !parsed_line[TITLE].empty())
         {
-            body_text += parsed_line[TITLE];
-            body_text += "\n\n";
+            full_text << parsed_line[TITLE];
+            full_text << '\n';
         }
         
         // add abstract
         if (parsed_line.size() > ABSTRACT && !parsed_line[ABSTRACT].empty()) 
         {
-            body_text += parsed_line[ABSTRACT];
-            body_text += "\n\n";
+            full_text << parsed_line[ABSTRACT];
+            full_text << '\n';
         }
         
         // try to find PDFs first (about 38k of em)
         std::string path_pdf = find_fulltext_pdf(parsed_line[SHA]);
         
-        // if no PDF, try XML (only finding about 800 of em --something wrong)
+        // if no PDF, try XML (only finding about 800 of em)
         if (path_pdf.empty() && parsed_line.size() > PMC_ID) {
             std::string path_xml = find_fulltext_xml(parsed_line[PMC_ID]);
             if (!path_xml.empty()) {
-                extract_body_text(path_xml, body_text);
+                extract_body_text_tofile(path_xml, full_text);
             }
         } else if (!path_pdf.empty()) {
-            extract_body_text(path_pdf, body_text);
+            extract_body_text_tofile(path_pdf, full_text);
         }
         
-        // process with python lemmatizer
-        if (!body_text.empty()) {
-            bool success = text_processor.process_text(body_text);
-            if (success) {
-                processed_count++;
+        if (full_text.is_open()) { // valid papers
+
+            // lemmatize text
+            std::unordered_map<std::string, std::pair<uint32_t, uint32_t>> temp_lex;
+            bool success_lemma = text_processor.lemmatize_text(full_text, temp_lex);
+
+            if (success_lemma) {
+                lemmatize_count++;
+                
+                // Build forward index using temp_lex
+                uint32_t doc_id = forward_index.add_document(cord_uid, temp_lex);
+                
             } else {
                 failed_count++;
-                if (failed_count <= 5) {  // DEBUG: show first few failures
-                    std::cerr << "Warning: Failed to process paper " << paper_count << "\n";
+                if (failed_count <= 5) {
+                    std::cerr << "failed to process paper no " 
+                             << paper_count << "\n";
                 }
             }
         } else {
@@ -117,7 +139,7 @@ int MetadataParser::metadata_parse()
         // progress
         if (paper_count % 1 == 0) {
             std::cout << "Progress: " << paper_count << " papers, "
-                      << processed_count << " processed, "
+                      << lemmatize_count << " processed, "
                       << text_processor.get_lexicon_size() << " unique terms"
                       << '\n';
         }
@@ -126,18 +148,26 @@ int MetadataParser::metadata_parse()
         if (paper_count >= 20) { break; }
     }
 
+    std::cout << "\nPROCESSING SUMMARY\n";
     std::cout << "Total papers read:       " << paper_count << "\n";
-    std::cout << "Successfully processed:  " << processed_count << "\n";
+    std::cout << "Successfully Lemmatized: " << lemmatize_count << "\n";
     std::cout << "Failed:                  " << failed_count << "\n";
     std::cout << "Skipped (no text):       " << skipped_count << "\n";
-    std::cout << "Unique terms in lexicon: " << text_processor.get_lexicon_size() << "\n";
+    std::cout << "Unique terms in lexicon: " << lexicon.size() << "\n";
     
     // Print top terms
-    text_processor.print_top_words(50);
+    lexicon.print_top_words(50);
+    
+    // Print forward index statistics
+    forward_index.print_statistics();
     
     // Save lexicon to file
-    std::string output_path = "indices/lexicon_cordR1.csv";
-    text_processor.save_lexicon(output_path);
+    std::string lexicon_path = "indices/lexicon_cordR1.csv";
+    lexicon.save_to_file(lexicon_path);
+    
+    // Save forward index to file (binary form)
+    std::string forward_index_path = "indices/forward_index_cordR1.bin";
+    forward_index.save_to_file(forward_index_path);
 
     file.close();
     return 0;
@@ -358,7 +388,29 @@ void MetadataParser::extract_body_text(const std::string& file_path, std::string
     }
 }
 
-
+void MetadataParser::extract_body_text_tofile(const std::string& file_path, std::ofstream& output_file) 
+{
+    if (file_path.empty()) { return; }
+    try {
+        std::ifstream file(file_path);
+        json data = json::parse(file);
+        
+        
+        // Extract only from body_text
+        if (data.contains("body_text") && data["body_text"].is_array()) {
+            for (const auto& section : data["body_text"]) {
+                if (section.contains("text") && section["text"].is_string()) {
+                    //body_text += section["text"].get<std::string>() + " ";
+                    output_file  << section["text"].get<std::string>() + " ";   
+                }
+            }
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error reading JSON file: " << e.what() << '\n';
+        return;
+    }
+}
 
 
 
