@@ -48,9 +48,9 @@ const std::string* ForwardIndex::get_document_metadata(uint32_t doc_id) const
 {
     auto it = doc_metadata.find(doc_id);
     if (it != doc_metadata.end()) {
-        return &it->second;
-    }
-    return nullptr;
+    return &it->second;
+}
+return nullptr;
 }
 
 // save in binary format for fast lookups
