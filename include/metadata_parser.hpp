@@ -17,6 +17,8 @@ private:
     static void extract_body_text(const std::string& file_path, 
                                   std::string& body_text);
 
+    // for creating sample
+    static void copy_file(const std::string& in_path);
 
 public:
     explicit MetadataParser(const std::string& data_path) 

@@ -64,10 +64,13 @@ int MetadataParser::metadata_parse()
 
     std::cout << "\nStarting paper processing...\n";
     
-    int paper_count = 0;
-    int lemmatize_count = 0;
-    int failed_count = 0;
-    int skipped_count = 0;
+    uint32_t paper_count = 0;
+    uint32_t lemmatize_count = 0;
+    uint32_t failed_count = 0;
+    uint32_t skipped_count = 0;
+    uint32_t pdf_count = 0;
+    uint32_t xml_count = 0;
+    uint32_t not_found = 0;
     
 
     // Read all the csv lines
@@ -103,9 +106,15 @@ int MetadataParser::metadata_parse()
             std::string path_xml = find_fulltext_xml(parsed_line[PMC_ID]);
             if (!path_xml.empty()) {
                 extract_body_text(path_xml, full_text);
+                xml_count++;
             }
-        } else if (!path_pdf.empty()) {
+            else {  // no pdf no xml
+                not_found++;
+            }
+        } 
+        else if (!path_pdf.empty()) {
             extract_body_text(path_pdf, full_text);
+            pdf_count++;
         }
 
 
@@ -148,7 +157,7 @@ int MetadataParser::metadata_parse()
         }
         
         // limit for testing 
-        if (paper_count >= 1000) { break; }
+        if (paper_count >= 100) { break; }
     }
 
 
@@ -157,6 +166,9 @@ int MetadataParser::metadata_parse()
     std::cout << "Successfully Lemmatized: " << lemmatize_count << "\n";
     std::cout << "Failed:                  " << failed_count << "\n";
     std::cout << "Skipped (no text):       " << skipped_count << "\n";
+    std::cout << "PDF's Found:             " << pdf_count << "\n";
+    std::cout << "XML's Found:             " << xml_count << "\n";
+    std::cout << "Not Found (No PDF, XML): " << not_found << "\n";
     std::cout << "Unique terms in lexicon: " << lexicon.size() << "\n";
 
     // Print top terms
@@ -170,21 +182,21 @@ int MetadataParser::metadata_parse()
     
 
     // Save lexicon to file
-    std::string lexicon_path = "indices/lexicon_cordR1.bin";
+    std::string lexicon_path = "sample/indices/lexicon_cordR1.bin";
     lexicon.save_to_file_binary(lexicon_path);
-    std::string lexicon_text = "indices/lexicon_text.txt";
+    std::string lexicon_text = "sample/indices/lexicon_text.txt";
     lexicon.save_to_file_csv(lexicon_text);
     
     // Save forward index to file (binary form)
-    std::string forward_index_path = "indices/forward_index_cordR1.bin";
+    std::string forward_index_path = "sample/indices/forward_index_cordR1.bin";
     forward_index.save_to_file(forward_index_path);
-    std::string forward_text = "indices/forward_index_text.txt";
+    std::string forward_text = "sample/indices/forward_index_text.txt";
     forward_index.save_as_text(forward_text, lexicon.get_reverse_lexicon());
 
     // save inverted_index to file (binary)
-    std::string inverted_index_path = "indices/inverted_index_cordR1.bin";
+    std::string inverted_index_path = "sample/indices/inverted_index_cordR1.bin";
     inverted_index.save_to_file(inverted_index_path);
-    std::string inverted_text = "indices/inverted_index_text.txt";
+    std::string inverted_text = "sample/indices/inverted_index_text.txt";
     inverted_index.save_as_text(inverted_text,lexicon.get_reverse_lexicon());
 
 
@@ -409,4 +421,19 @@ void MetadataParser::extract_body_text(const std::string& file_path, std::string
 
 
 
+void MetadataParser::copy_file(const std::string& in_path)
+{
+
+    std::string out_path = "sample/data/";
+
+    std::string temp;
+    for (size_t i = in_path.size() - 1; in_path[i] != '/'; i--) {
+        temp += in_path[i]; 
+    }
+    std::reverse(temp.begin(), temp.end());
+
+    out_path += temp;
+
+    fs::copy_file(in_path, out_path); 
+}
 

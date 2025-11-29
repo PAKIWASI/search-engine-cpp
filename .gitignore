@@ -1,10 +1,11 @@
 # folders
-build/
-data/
-indices/
+/build/
+/data/
+/indices
+
+
 
 # configs
-CMakeLists.txt
 .clangd
 
 # python
