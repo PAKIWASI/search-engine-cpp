@@ -157,7 +157,7 @@ int MetadataParser::metadata_parse()
         }
         
         // limit for testing 
-        if (paper_count >= 100) { break; }
+        if (paper_count >= 20) { break; }
     }
 
 
@@ -182,21 +182,21 @@ int MetadataParser::metadata_parse()
     
 
     // Save lexicon to file
-    std::string lexicon_path = "sample/indices/lexicon_cordR1.bin";
+    std::string lexicon_path = "indices/lexicon_cordR1.bin";
     lexicon.save_to_file_binary(lexicon_path);
-    std::string lexicon_text = "sample/indices/lexicon_text.txt";
+    std::string lexicon_text = "indices/lexicon_text.txt";
     lexicon.save_to_file_csv(lexicon_text);
     
     // Save forward index to file (binary form)
-    std::string forward_index_path = "sample/indices/forward_index_cordR1.bin";
+    std::string forward_index_path = "indices/forward_index_cordR1.bin";
     forward_index.save_to_file(forward_index_path);
-    std::string forward_text = "sample/indices/forward_index_text.txt";
+    std::string forward_text = "indices/forward_index_text.txt";
     forward_index.save_as_text(forward_text, lexicon.get_reverse_lexicon());
 
     // save inverted_index to file (binary)
-    std::string inverted_index_path = "sample/indices/inverted_index_cordR1.bin";
+    std::string inverted_index_path = "indices/inverted_index_cordR1.bin";
     inverted_index.save_to_file(inverted_index_path);
-    std::string inverted_text = "sample/indices/inverted_index_text.txt";
+    std::string inverted_text = "indices/inverted_index_text.txt";
     inverted_index.save_as_text(inverted_text,lexicon.get_reverse_lexicon());
 
 
