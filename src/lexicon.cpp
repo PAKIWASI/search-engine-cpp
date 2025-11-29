@@ -4,28 +4,32 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip>
-#include <sstream>
 #include <vector>
 
 
 
-uint32_t Lexicon::add_word(const std::string& word, uint32_t frequency) 
+uint32_t Lexicon::add_word(const std::string& word, const uint32_t& freq) 
 {
-    auto it = data.find(word);
-    if (it != data.end()) {
-        it->second.frequency += frequency;   // word exists, update frequency
+    auto it = lexicon.find(word);
+    if (it != lexicon.end()) {
+        it->second.freq += freq;   // word exists, update freq
         return it->second.word_id;
-    } else {
+    }
+    else {
         uint32_t word_id = next_word_id++;  // new word, assign new id
-        data[word] = {word_id, frequency};
+        
+        lexicon[word] = { word_id, freq };
+
+        reverse_lex[word_id] = word; // add reverse mapping
+        //
         return word_id;
     }
 }
 
-const WordData* Lexicon::get_word_info(const std::string& word) const 
+const WordData* Lexicon::get_word_data(const std::string& word) const 
 {
-    auto it = data.find(word);
-    if (it != data.end()) {
+    auto it = lexicon.find(word);
+    if (it != lexicon.end()) {
         return &it->second;
     }
     return nullptr;
@@ -33,46 +37,58 @@ const WordData* Lexicon::get_word_info(const std::string& word) const
 
 uint32_t Lexicon::get_word_id(const std::string& word) const 
 {
-    auto it = data.find(word);
-    if (it != data.end()) {
+    auto it = lexicon.find(word);
+    if (it != lexicon.end()) {
         return it->second.word_id;
     }
     return UINT32_MAX;      // return max as not found
 }
 
-uint32_t Lexicon::get_frequency(const std::string& word) const 
+
+std::string* Lexicon::get_word(const uint32_t& word_id)
 {
-    auto it = data.find(word);
-    if (it != data.end()) {
-        return it->second.frequency;
+    auto it = reverse_lex.find(word_id);
+    if (it != reverse_lex.end()) {
+        return &it->second;
+    }
+    else {
+        return nullptr;
+    }
+}
+
+uint32_t Lexicon::get_freq(const std::string& word) const 
+{
+    auto it = lexicon.find(word);
+    if (it != lexicon.end()) {
+        return it->second.freq;
     }
     return 0;
 }
 
 bool Lexicon::contains(const std::string& word) const 
 {
-    return data.contains(word);
+    return lexicon.contains(word);
 }
 
 void Lexicon::merge(const std::unordered_map<std::string, WordData>& temp_lex) 
 {
     for (const auto& [word, pair] : temp_lex) 
     {
-        add_word(word, pair.frequency);
+        add_word(word, pair.freq); // ignoring return value
     }
 }
 
 void Lexicon::update_ids(std::unordered_map<std::string, WordData>& temp_lex) const 
 {
     for (auto& [word, pair] : temp_lex) {
-        auto it = data.find(word);
-        if (it != data.end()) {
+        auto it = lexicon.find(word);
+        if (it != lexicon.end()) {
             pair.word_id = it->second.word_id;  // update with actual ID
         }
     }
 }
 
-void Lexicon::save_to_file(const std::string& output_path) const 
+void Lexicon::save_to_file_csv(const std::string& output_path) const 
 {
     std::ofstream file(output_path);
     if (!file.is_open()) {
@@ -81,26 +97,26 @@ void Lexicon::save_to_file(const std::string& output_path) const
     }
     
     // convert to vector for sorting (can't sort the hashmap(wtf?))
-    std::vector<std::pair<std::string, WordData>> sorted_data(data.begin(), data.end());
+    std::vector<std::pair<std::string, WordData>> sorted_data(lexicon.begin(), lexicon.end());
     
-    // Sort by frequency
+    // Sort by freq
     std::sort(sorted_data.begin(), sorted_data.end(),
               [](const auto& a, const auto& b) { 
-                  return a.second.frequency > b.second.frequency; 
+                  return a.second.freq > b.second.freq; 
               });
     
     // write to file
-    file << "word,wordid,frequency\n";
+    file << "word,wordid,freq\n";
     for (const auto& [word, pair] : sorted_data) {
-        file << word << "," << pair.word_id << "," << pair.frequency << '\n';
+        file << word << "," << pair.word_id << "," << pair.freq << '\n';
     }
     
     file.close();
     std::cout << "\nLexicon saved to " << output_path << '\n';
-    std::cout << "  Total unique terms: " << data.size() << '\n';
+    std::cout << "  Total unique terms: " << lexicon.size() << '\n';
 }
 
-bool Lexicon::load_from_file(const std::string& input_path) 
+bool Lexicon::load_from_file_csv(const std::string& input_path) 
 {
     std::ifstream file(input_path);
     if (!file.is_open()) {
@@ -122,7 +138,7 @@ bool Lexicon::load_from_file(const std::string& input_path)
         
         if (line.empty()) { continue; }
         
-        // parse CSV line: word,wordid,frequency
+        // parse CSV line: word,wordid,freq
         std::stringstream ss(line);
         std::string word;
         std::string word_id_str;
@@ -134,9 +150,9 @@ bool Lexicon::load_from_file(const std::string& input_path)
             
             try {
                 uint32_t word_id = std::stoul(word_id_str);
-                uint32_t frequency = std::stoul(freq_str);
+                uint32_t freq = std::stoul(freq_str);
                 
-                data[word] = {word_id, frequency};
+                lexicon[word] = {word_id, freq};
                 
                 if (word_id >= next_word_id) {
                     next_word_id = word_id + 1;
@@ -149,16 +165,83 @@ bool Lexicon::load_from_file(const std::string& input_path)
     
     file.close();
     std::cout << "Lexicon loaded from " << input_path << '\n';
-    std::cout << "Total unique terms: " << data.size() << '\n';
+    std::cout << "Total unique terms: " << lexicon.size() << '\n';
+    return true;
+}
+
+void Lexicon::save_to_file_binary(const std::string& output_path) const
+{
+    std::ofstream file(output_path, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Error: Cannot open Lexicon file for writing\n";
+        return;
+    }   
+
+    // convert to vector for sorting (can't sort the hashmap(wtf?))
+    std::vector<std::pair<std::string, WordData>> sorted_data(lexicon.begin(), lexicon.end());
+    
+    // Sort by freq
+    std::sort(sorted_data.begin(), sorted_data.end(),
+              [](const auto& a, const auto& b) { 
+                  return a.second.freq > b.second.freq; 
+              });
+
+
+    // write no of entries
+    uint32_t num_entries = static_cast<uint32_t>(lexicon.size());
+    file.write(reinterpret_cast<const char*>(&num_entries), sizeof(num_entries));
+
+    // write all entries (word, word_id, freq)
+    for (const auto& [word, word_data] : sorted_data) {
+        // write the word
+        file.write(word.c_str(), static_cast<long>(word.size() + 1));     // + 1 for /0 
+        // write the id
+        file.write(reinterpret_cast<const char*>(&word_data.word_id), sizeof(word_data.word_id)); 
+        // write the freq
+        file.write(reinterpret_cast<const char*>(&word_data.freq), sizeof(word_data.freq));
+    }
+}
+
+bool Lexicon::load_from_file_binary(const std::string& input_path)
+{
+    std::ifstream file(input_path, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Error: Cannot open Lexicon file for reading\n";
+        return false;
+    }
+
+    lexicon.clear();
+
+    // read no of entries
+    uint32_t num_entries;
+    file.read(reinterpret_cast<char*>(&num_entries), sizeof(num_entries));
+
+    // read each entry
+    for (uint32_t i = 0; i < num_entries; i++) {
+        // read word by finding null terminator
+        std::string word;
+        std::getline(file, word, '\0');
+        // read id
+        uint32_t word_id; 
+        file.read(reinterpret_cast<char*>(&word_id), sizeof(word_id));
+        // read freq
+        uint32_t freq;
+        file.read(reinterpret_cast<char*>(&freq), sizeof(freq));
+
+        // save to lex
+        lexicon[word] = { word_id, freq };
+    }
+    
     return true;
 }
 
 void Lexicon::print_top_words(int n) const 
 {
-    std::vector<std::pair<std::string, WordData>> sorted_data(data.begin(), data.end());
+    std::vector<std::pair<std::string, WordData>> sorted_data(lexicon.begin(), lexicon.end());
+
     std::sort(sorted_data.begin(), sorted_data.end(),
               [](const auto& a, const auto& b) { 
-                  return a.second.frequency > b.second.frequency; 
+                  return a.second.freq > b.second.freq; 
               });
     
     std::cout << "\n  Top " << n << " Most Frequent Terms:\n";
@@ -168,15 +251,14 @@ void Lexicon::print_top_words(int n) const
         std::cout << "  " << std::setw(4) << (i + 1) << ". "
                   << std::setw(20) << std::left << sorted_data[i].first 
                   << " (ID:" << std::setw(6) << sorted_data[i].second.word_id << ")"
-                  << " freq: " << std::setw(8) << std::right << sorted_data[i].second.frequency << '\n';
+                  << " freq: " << std::setw(8) << std::right << sorted_data[i].second.freq << '\n';
     }
 }
 
 void Lexicon::clear() 
 {
-    data.clear();
+    lexicon.clear();
     next_word_id = 0;
 }
-
 
 

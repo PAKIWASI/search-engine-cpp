@@ -1,19 +1,18 @@
 #include "metadata_parser.hpp"
+#include "inverted_index.hpp"
 #include "nlohmann_json.hpp"
 #include "text_processor.hpp"
 #include "lexicon.hpp"
 #include "forward_index.hpp"
 
-#include <cstdint>
-#include <cstdio>
+
 #include <iostream> 
 #include <fstream>  
-#include <filesystem>
-#include <string>
-#include <unordered_map>
+
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
+
 
 #define HEADER_SIZE 18
 
@@ -28,6 +27,7 @@ using json = nlohmann::json;
 // main parser
 int MetadataParser::metadata_parse() 
 {
+
     std::ifstream file(data_path + "/metadata.csv"); 
     if (!file.is_open()) {
         std::cout << "Error: can't open metadata.csv\n";
@@ -37,7 +37,7 @@ int MetadataParser::metadata_parse()
     std::string line;
         
     // Read header
-    if (!getline(file, line)) {
+    if (!std::getline(file, line)) {
         std::cerr << "Error: Empty metadata file" << '\n';
         return -1;
     }
@@ -57,7 +57,11 @@ int MetadataParser::metadata_parse()
     
     // Initialize Forward Index
     ForwardIndex forward_index;
+
+    // Initialize Inverted Index
+    InvertedIndex inverted_index;
     
+
     std::cout << "\nStarting paper processing...\n";
     
     int paper_count = 0;
@@ -67,17 +71,12 @@ int MetadataParser::metadata_parse()
     
 
     // Read all the csv lines
-    while (getline(file, line)) 
+    while (std::getline(file, line)) 
     {
         paper_count++;
         
         // parse csv line
         parse_csv_line(line, parsed_line);
-
-        // get cord_uid for this paper
-        std::string cord_uid = parsed_line.size() > CORD_UID ? 
-                               parsed_line[CORD_UID] : "";
-
 
         // build text as a string
         std::string full_text;
@@ -111,16 +110,25 @@ int MetadataParser::metadata_parse()
 
 
         if (!full_text.empty()) { // valid papers
-            // lemmatize text
-            std::unordered_map<std::string, WordData> temp_lex;
+            // Lemmatize text
+            // store data of curr doc in temp_lex
+            std::unordered_map<std::string, WordData> temp_lex; 
             bool success_lemma = text_processor.lemmatize_text(full_text, temp_lex);
 
             if (success_lemma) {
+
                 lemmatize_count++;
-                
+
+                // get cord_uid for this paper
+                std::string cord_uid = parsed_line.size() > CORD_UID ? parsed_line[CORD_UID] : "";
                 // Build forward index using temp_lex
                 uint32_t doc_id = forward_index.add_document(cord_uid, temp_lex);
-                
+
+                // Build inverted index
+                // get word_id, freq from temp lex for each
+                // get docid from forward_index
+                inverted_index.add_document(doc_id, temp_lex);
+
             } else {
                 failed_count++;
                 if (failed_count <= 5) {
@@ -133,16 +141,16 @@ int MetadataParser::metadata_parse()
         }
         
         // progress
-        if (paper_count % 1 == 0) {
+        if (paper_count % 10 == 0) {
             std::cout << "Progress: " << paper_count << " papers, "
                       << lemmatize_count << " processed, "
-                      << text_processor.get_lexicon_size() << " unique terms"
-                      << '\n';
+                      << text_processor.get_lexicon_size() << " unique terms\n";
         }
         
         // limit for testing 
-        if (paper_count >= 100) { break; }
+        if (paper_count >= 1000) { break; }
     }
+
 
     std::cout << "\nPROCESSING SUMMARY\n";
     std::cout << "Total papers read:       " << paper_count << "\n";
@@ -150,20 +158,35 @@ int MetadataParser::metadata_parse()
     std::cout << "Failed:                  " << failed_count << "\n";
     std::cout << "Skipped (no text):       " << skipped_count << "\n";
     std::cout << "Unique terms in lexicon: " << lexicon.size() << "\n";
-    
+
     // Print top terms
     lexicon.print_top_words(50);
     
-    // Print forward index statistics
+    // Print forward index stats
     forward_index.print_statistics();
+
+    // print inverted_index stats
+    inverted_index.print_statistics();
     
+
     // Save lexicon to file
-    std::string lexicon_path = "indices/lexicon_cordR1.csv";
-    lexicon.save_to_file(lexicon_path);
+    std::string lexicon_path = "indices/lexicon_cordR1.bin";
+    lexicon.save_to_file_binary(lexicon_path);
+    std::string lexicon_text = "indices/lexicon_text.txt";
+    lexicon.save_to_file_csv(lexicon_text);
     
     // Save forward index to file (binary form)
     std::string forward_index_path = "indices/forward_index_cordR1.bin";
     forward_index.save_to_file(forward_index_path);
+    std::string forward_text = "indices/forward_index_text.txt";
+    forward_index.save_as_text(forward_text, lexicon.get_reverse_lexicon());
+
+    // save inverted_index to file (binary)
+    std::string inverted_index_path = "indices/inverted_index_cordR1.bin";
+    inverted_index.save_to_file(inverted_index_path);
+    std::string inverted_text = "indices/inverted_index_text.txt";
+    inverted_index.save_as_text(inverted_text,lexicon.get_reverse_lexicon());
+
 
     file.close();
     return 0;
@@ -180,8 +203,8 @@ int MetadataParser::metadata_stats()
     std::string line;
         
     // Read header
-    if (!getline(file, line)) {
-        std::cerr << "Error: Empty metadata file" << '\n';
+    if (!std::getline(file, line)) {
+        std::cerr << "Empty metadata file" << '\n';
         return -1;
     }
     std::cout << "Line: " << line << '\n';
@@ -217,7 +240,7 @@ int MetadataParser::metadata_stats()
 
 
     int a = 1;
-    while (getline(file, line)) 
+    while (std::getline(file, line)) 
     {
         parse_csv_line(line, parsed_line);
 
@@ -384,30 +407,6 @@ void MetadataParser::extract_body_text(const std::string& file_path, std::string
     }
 }
 
-// TODO: remove this
-void MetadataParser::extract_body_text_tofile(const std::string& file_path, std::ofstream& output_file) 
-{
-    if (file_path.empty()) { return; }
-    try {
-        std::ifstream file(file_path);
-        json data = json::parse(file);
-        
-        
-        // Extract only from body_text
-        if (data.contains("body_text") && data["body_text"].is_array()) {
-            for (const auto& section : data["body_text"]) {
-                if (section.contains("text") && section["text"].is_string()) {
-                    //body_text += section["text"].get<std::string>() + " ";
-                    output_file  << section["text"].get<std::string>() + " ";   
-                }
-            }
-        }
-        
-    } catch (const std::exception& e) {
-        std::cerr << "Error reading JSON file: " << e.what() << '\n';
-        return;
-    }
-}
 
 
 

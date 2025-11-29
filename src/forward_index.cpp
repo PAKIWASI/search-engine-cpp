@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <algorithm>
+#include <unordered_map>
 
 
 
@@ -12,22 +13,24 @@ uint32_t ForwardIndex::add_document(const std::string& cord_uid,
 {
     uint32_t doc_id = next_doc_id++;
     
-    doc_metadata[doc_id] = cord_uid;  // Store cord_uid
+    doc_metadata[doc_id] = cord_uid;  // store cord_uid
     
-    // build term frequency vector for this document
+    // build term freq vector for this document
     std::vector<WordData> terms;
     terms.reserve(temp_lex.size());
     
-    for (const auto& [word, pair] : temp_lex) 
+    for (const auto& [word, word_info] : temp_lex) 
     {
-        terms.push_back({pair.word_id, pair.frequency});
+        terms.push_back({word_info.word_id, word_info.freq});
     }
     
-    // Sort by word_id for better cache locality during lookups
+    // TODO: is this really needed?
+    // sort by word_id for better cache locality during lookups
     std::sort(terms.begin(), terms.end(), 
-              [](const WordData& a, const WordData& b) {
-                  return a.word_id < b.word_id;
-              });
+               [](const WordData& a, const WordData& b) {
+                        return a.word_id < b.word_id;
+                     }
+    );
     
     forward_index[doc_id] = std::move(terms); // dont copy 
     
@@ -85,7 +88,7 @@ void ForwardIndex::save_to_file(const std::string& output_path) const
         
             // write all terms
         file.write(reinterpret_cast<const char*>(terms.data()), 
-                  term_count * sizeof(WordData));
+                   term_count * sizeof(WordData));
     }
     
     file.close();
@@ -119,7 +122,7 @@ bool ForwardIndex::load_from_file(const std::string& input_path)
         uint32_t metadata_len;
         file.read(reinterpret_cast<char*>(&metadata_len), sizeof(metadata_len));
         std::string metadata(metadata_len, '\0');
-        file.read(metadata.data(), metadata_len);     // TODO: is .data() right? maybe use &metadata[0] ??
+        file.read(metadata.data(), metadata_len);
         doc_metadata[doc_id] = metadata;
         
             // read number of terms
@@ -131,6 +134,7 @@ bool ForwardIndex::load_from_file(const std::string& input_path)
         file.read(reinterpret_cast<char*>(terms.data()), 
                  term_count * sizeof(WordData));
         
+        // add to forward index
         forward_index[doc_id] = std::move(terms);
         
         if (doc_id >= next_doc_id) {
@@ -143,20 +147,47 @@ bool ForwardIndex::load_from_file(const std::string& input_path)
     return true;
 }
 
-size_t ForwardIndex::get_total_term_count() const 
+
+void ForwardIndex::save_as_text(const std::string& output_path, 
+                                const std::unordered_map<uint32_t, std::string>& reverse_lex)
 {
-    size_t total = 0;
-    for (const auto& [doc_id, terms] : forward_index) {
-        total += terms.size();
+    std::ofstream file(output_path);
+    if (!file.is_open()) {
+        std::cerr << "Error: Cannot open forward index file for writing\n";
+        return;
+    }    
+
+    file << "doc_id: cord_uid -> [ (word_id, word, freq) ]\n";
+
+    for (const auto& [doc_id, word_data] : forward_index) {
+        
+        file << doc_id << ": " << doc_metadata[doc_id] << " -> [ ";
+        
+        for (const auto& [word_id, freq] : word_data) {
+            file << "( " << word_id << ", " << reverse_lex.at(word_id) << ", " << freq << " ), ";
+        }
+
+        file << '\n';
     }
-    return total;
+
+    file.close();
+}
+
+uint32_t ForwardIndex::get_total_words(uint32_t doc_id) const 
+{
+    auto it = forward_index.find(doc_id);
+    if (it != forward_index.end()) {
+        return it->second.size();
+    }
+    else {
+        return 0;
+    }
 }
 
 void ForwardIndex::print_statistics() const 
 {
     std::cout << "\nForward Index Statistics:\n";
     std::cout << "  Total documents: " << forward_index.size() << '\n';
-    std::cout << "  Total unique terms across all docs: " << get_total_term_count() << '\n';
     
     if (!forward_index.empty()) {
         size_t min_terms = SIZE_MAX;
