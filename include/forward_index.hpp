@@ -1,9 +1,9 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include <cstdint>
 
 #include "word_data.hpp"
 
@@ -11,36 +11,41 @@
 
 class ForwardIndex {
 private:
-    // TODO: just use cord_uid as the key to remove 2nd map?
-
-    // doc_id -> vector of (word_id, frequency)
+    // doc_id -> vector of (word_id, freq)
     std::unordered_map<uint32_t, std::vector<WordData>> forward_index;
     
-    // doc_id -> document metadata (cord_uid, title, etc.)
+    // doc_id -> document metadata (cord_uid)
     std::unordered_map<uint32_t, std::string> doc_metadata;
     
     uint32_t next_doc_id = 0;
 
 public:
-    // Add a document to the forward index
+    ForwardIndex() = default;
+
+    // add a document to the forward index (params got from parser)
     uint32_t add_document(const std::string& cord_uid,
                          const std::unordered_map<std::string, WordData>& temp_lex);
     
-    // Get terms for a document
+    // get terms for a document
     const std::vector<WordData>* get_document_terms(uint32_t doc_id) const;
     
-    // Get doc's cord_uid
+    // get doc's cord_uid only
     const std::string* get_doc_cord_uid(uint32_t doc_id) const;
     
-    // Save forward index to file
+    // save forward index to file (binary format)
     void save_to_file(const std::string& output_path) const;
-    
+
     // Load forward index from file
     bool load_from_file(const std::string& input_path);
+
+    // for dubugging, viewing
+    void save_as_text(const std::string& output_path, 
+                      const std::unordered_map<uint32_t, std::string>& reverse_lex);
     
-    // Statistics
-    size_t get_document_count() const { return forward_index.size(); }
-    size_t get_total_term_count() const;
+    // stats
+    uint32_t get_total_words(uint32_t doc_id) const;
+
+    uint32_t get_document_count() const { return forward_index.size(); }
     
     void print_statistics() const;
 };

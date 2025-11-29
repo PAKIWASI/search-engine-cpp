@@ -185,7 +185,6 @@ bool TextProcessor::process_with_daemon(const std::string& text,
         }
         
         std::string line_str(line);
-        std::cout << "Received line " << line_count << ": " << line_str << "\n";
         
         // check for end marker
         if (line_str == "END_OF_DOCUMENT") {
@@ -201,7 +200,7 @@ bool TextProcessor::process_with_daemon(const std::string& text,
         
         if (line_str.empty()) { continue; }
         
-        // parse CSV: word,frequency
+        // parse CSV: word,freq
         size_t comma_pos = line_str.find(',');
         if (comma_pos != std::string::npos) {
             std::string word = line_str.substr(0, comma_pos);
@@ -209,8 +208,9 @@ bool TextProcessor::process_with_daemon(const std::string& text,
             
             try {
                 uint32_t freq = std::stoul(freq_str);
-                temp_lex[word] = {0, freq};
-                std::cout << "Parsed word: " << word << " freq: " << freq << "\n";
+
+                temp_lex[word] = {0, freq};         // id = 0 is placeholder
+                
             } catch (const std::exception& e) {
                 std::cerr << "Parse error for word '" << word 
                          << "': " << e.what() << '\n';

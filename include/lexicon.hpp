@@ -1,8 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
-#include <cstdint>
 
 #include "word_data.hpp"
 
@@ -10,50 +10,67 @@
 
 class Lexicon {
 private:
-    // word -> (word_id, frequency)
-    std::unordered_map<std::string, WordData> data;
+    // word -> (word_id, freq)
+    std::unordered_map<std::string, WordData> lexicon;
     uint32_t next_word_id = 0;
+
+    // reverse mapping word_id ->word (needed for visualization)
+    std::unordered_map<uint32_t, std::string> reverse_lex;
+
+    // add or update a word in the lexicon
+    // returns the word_id of the word
+    uint32_t add_word(const std::string& word, const uint32_t& freq);
 
 public:
     Lexicon() = default;
     
-    // Add or update a word in the lexicon
-    // Returns the word_id assigned to this word
-    uint32_t add_word(const std::string& word, uint32_t frequency = 1);
+        // get word_data for a word 
+    const WordData* get_word_data(const std::string& word) const;
     
-    // Get word_data for a word 
-    const WordData* get_word_info(const std::string& word) const;
-    
-    // Get word_id only 
+    // get word_id only 
     uint32_t get_word_id(const std::string& word) const;
     
-    // Get frequency for a word
-    uint32_t get_frequency(const std::string& word) const;
+    // get freq for a word
+    uint32_t get_freq(const std::string& word) const;
+
+    std::string* get_word(const uint32_t& word_id);
     
-    // Check if word exists
+    // check if word exists
     bool contains(const std::string& word) const;
     
-    // Get lexicon size
-    size_t size() const { return data.size(); }
+    // get lexicon size
+    size_t size() const { return lexicon.size(); }
     
-    // Get all data (for iteration)
-    const std::unordered_map<std::string, WordData>& get_data() const {
-        return data;
+    // get all data (for iteration)
+    const std::unordered_map<std::string, WordData>& get_lexicon() const 
+    {
+        return lexicon;
+    }
+
+    const std::unordered_map<uint32_t, std::string>& get_reverse_lexicon() const
+    {
+        return reverse_lex;
     }
     
-    // Merge another lexicon or temp lexicon into this one
+    //merge temp lex into main lex
     void merge(const std::unordered_map<std::string, WordData>& temp_lex);
     
-    // Update temp_lex with actual word IDs from this lexicon
+    // update temp_lex with actual word IDs from this lexicon
     void update_ids(std::unordered_map<std::string, WordData>& temp_lex) const;
     
-    // Save lexicon to CSV file
-    void save_to_file(const std::string& output_path) const;
+    // save lexicon to CSV file
+    void save_to_file_csv(const std::string& output_path) const;
     
-    // Load lexicon from CSV file
-    bool load_from_file(const std::string& input_path);
-    
-    // Print top N most frequent words
+    // load lexicon from CSV file
+    bool load_from_file_csv(const std::string& input_path);
+
+        // save/ load in binary format
+    void save_to_file_binary(const std::string& output_path) const;
+
+    bool load_from_file_binary(const std::string& input_path);
+
+
+    // print top N most frequent words
     void print_top_words(int n) const;
     
     // Clear the lexicon
