@@ -31,10 +31,10 @@ const std::vector<InvertedEntry>* InvertedIndex::get_word_terms(uint32_t word_id
         return &it->second;    
     }
 
-    return nullptr;
+    return nullptr;  // not found
 }
 
-void InvertedIndex::save_to_file(const std::string& output_path) const
+void InvertedIndex::save_to_file(const std::string& output_path) 
 {
     // we store as binary for fast save/load
     std::ofstream file(output_path, std::ios::binary);
@@ -43,6 +43,14 @@ void InvertedIndex::save_to_file(const std::string& output_path) const
         return;
     }
 
+     // sort all vector elms by doc_id
+    for (auto& [word_id, terms] : inverted_index) {  
+        std::sort(terms.begin(), terms.end(),
+                  [](const InvertedEntry& a, const InvertedEntry& b) {
+                      return a.doc_id < b.doc_id;
+                  });
+    }  
+
     // write no of words
     uint32_t word_count = static_cast<uint32_t>(inverted_index.size());
     file.write(reinterpret_cast<const char*>(&word_count), sizeof(word_count));
@@ -50,7 +58,7 @@ void InvertedIndex::save_to_file(const std::string& output_path) const
 
     // write each word entry
     for (const auto& [word_id, terms] : inverted_index) {
-        
+
         // write word_id
         file.write(reinterpret_cast<const char*>(&word_id), sizeof(word_id));
 
@@ -131,6 +139,7 @@ void InvertedIndex::save_as_text(const std::string& output_path,
         file << '\n';
     }
      
+    std::cout << "Inverted index saved to " << output_path << '\n';
     file.close();
 }
 

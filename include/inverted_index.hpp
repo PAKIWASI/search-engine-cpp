@@ -26,7 +26,7 @@ public:
     const std::vector<InvertedEntry>* get_word_terms(uint32_t word_id) const;
 
     // save in binary format
-    void save_to_file(const std::string& output_path) const;
+    void save_to_file(const std::string& output_path);
 
     // load from binary format
     bool load_from_file(const std::string& input_path);

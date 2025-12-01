@@ -16,12 +16,15 @@ uint32_t Lexicon::add_word(const std::string& word, const uint32_t& freq)
         return it->second.word_id;
     }
     else {
+
         uint32_t word_id = next_word_id++;  // new word, assign new id
+        
         
         lexicon[word] = { word_id, freq };
 
         reverse_lex[word_id] = word; // add reverse mapping
-        //
+        
+
         return word_id;
     }
 }
@@ -200,6 +203,10 @@ void Lexicon::save_to_file_binary(const std::string& output_path) const
         // write the freq
         file.write(reinterpret_cast<const char*>(&word_data.freq), sizeof(word_data.freq));
     }
+
+    file.close();
+    std::cout << "\nLexicon saved to " << output_path << '\n';
+    std::cout << "  Total unique terms: " << lexicon.size() << '\n';
 }
 
 bool Lexicon::load_from_file_binary(const std::string& input_path)
@@ -231,7 +238,11 @@ bool Lexicon::load_from_file_binary(const std::string& input_path)
         // save to lex
         lexicon[word] = { word_id, freq };
     }
-    
+
+    file.close();
+    std::cout << "Lexicon loaded from " << input_path << '\n';
+    std::cout << "Total unique terms: " << lexicon.size() << '\n';
+
     return true;
 }
 

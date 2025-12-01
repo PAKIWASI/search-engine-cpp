@@ -24,14 +24,6 @@ uint32_t ForwardIndex::add_document(const std::string& cord_uid,
         terms.push_back({word_info.word_id, word_info.freq});
     }
     
-    // TODO: is this really needed?
-    // sort by word_id for better cache locality during lookups
-    std::sort(terms.begin(), terms.end(), 
-               [](const WordData& a, const WordData& b) {
-                        return a.word_id < b.word_id;
-                     }
-    );
-    
     forward_index[doc_id] = std::move(terms); // dont copy 
     
     return doc_id;
@@ -170,6 +162,7 @@ void ForwardIndex::save_as_text(const std::string& output_path,
         file << '\n';
     }
 
+    std::cout << "Forward index saved to " << output_path << '\n';
     file.close();
 }
 

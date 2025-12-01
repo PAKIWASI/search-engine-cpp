@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <cstdio>
 
+
 class TextProcessor {
 private:
     Lexicon& lexicon;
@@ -26,15 +27,18 @@ private:
     bool process_with_daemon(const std::string& text,
                             std::unordered_map<std::string, WordData>& temp_lex);
 
+    bool process_with_daemon2(const std::string& text,
+                    std::unordered_map<std::string, WordData>& temp_lex);
+
 public:
     explicit TextProcessor(Lexicon& lex,
-        const std::string& python_path = "python/.venv/bin/python3",
-        const std::string& script_path = "python/lemmatizer_daemon.py");
+                           const std::string& python_path = "python/.venv/bin/python3",
+                           const std::string& script_path = "python/lemmatizer_daemon.py");
     
     ~TextProcessor();
     
     // Process text through daemon
-    bool lemmatize_text(const std::string& text, 
+    bool lemmatize_text(std::string& text, 
                        std::unordered_map<std::string, WordData>& temp_lex);
     
     size_t get_lexicon_size() const { return lexicon.size(); }
