@@ -91,6 +91,7 @@ def lemmatize_text(text):
     
     return lexicon
 
+
 def main():
     print("Lemmatizer daemon ready", file=sys.stderr)
     sys.stderr.flush()
@@ -101,15 +102,19 @@ def main():
             text_line = sys.stdin.readline()
             if not text_line:
                 break
-            
+
             text = text_line.strip()
             if not text:
                 continue
+
+            print(f"DEBUG: Received text length: {len(text)}", file=sys.stderr)
+            if len(text) < 500:  # If text is too short
+                print(f"DEBUG: Short text sample: {text[:200]}", file=sys.stderr)
             
-            # Process
+            # process text
             lexicon = lemmatize_text(text)
             
-            # Output
+            # output
             print("word,frequency")
             for word, freq in lexicon.most_common():
                 word_escaped = word.replace(',', '_')

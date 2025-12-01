@@ -1,9 +1,8 @@
 #include "text_processor.hpp"
 
+#include <algorithm>
 #include <iostream>
 #include <sys/wait.h>
-#include <unistd.h>
-#include <signal.h>
 #include <cstring>
 
 
@@ -157,8 +156,8 @@ bool TextProcessor::process_with_daemon(const std::string& text,
         std::cerr << "Python daemon not active\n";
         return false;
     }
-    
-    std::cout << "Sending text to daemon\n";
+
+    std::cout << "DEBUG: Sending text of length " << text.length() << " to daemon\n";
     
     // send text as a single line (text is a line with space b/w sections)
     
@@ -168,14 +167,10 @@ bool TextProcessor::process_with_daemon(const std::string& text,
     // read CSV output
     char line[4096];
     bool first_line = true;
-    int line_count = 0;
-    
-    std::cout << "Waiting for daemon response...\n";
     
     // get the response
     while (fgets(line, sizeof(line), python_out) != nullptr) 
     {
-        line_count++;
         
         // remove trailing newline
         size_t len = strlen(line);
@@ -188,7 +183,6 @@ bool TextProcessor::process_with_daemon(const std::string& text,
         
         // check for end marker
         if (line_str == "END_OF_DOCUMENT") {
-            std::cout << "END_OF_DOCUMENT reached\n";
             break;
         }
         
@@ -223,16 +217,33 @@ bool TextProcessor::process_with_daemon(const std::string& text,
 }
 
 
-bool TextProcessor::lemmatize_text(const std::string& text,
+bool TextProcessor::lemmatize_text(std::string& text,
                     std::unordered_map<std::string, WordData>& temp_lex) 
 {
+    temp_lex.clear();
 
     if (text.empty()) {
-        temp_lex.clear();
         return true;
     }
+
+
+     // replace newlines and carriage returns with spaces (in-place)
+    std::replace(text.begin(), text.end(), '\n', ' ');
+    std::replace(text.begin(), text.end(), '\r', ' ');
+    std::replace(text.begin(), text.end(), '\t', ' ');
     
-    // process through daemon
+    // remove null bytes and other control characters (in-place)
+    text.erase(
+        std::remove_if(text.begin(), text.end(),
+            [](unsigned char c) {
+                return c == '\0' || (c < 32 && c != ' ');
+            }
+        ),
+        text.end()
+    );
+
+
+    // process through python daemon
     bool success = process_with_daemon(text, temp_lex);
     
     if (success && !temp_lex.empty()) {
@@ -245,6 +256,4 @@ bool TextProcessor::lemmatize_text(const std::string& text,
     
     return success;
 }
-
-
 
