@@ -5,13 +5,14 @@
 #include "lexicon.hpp"
 #include "forward_index.hpp"
 
-
 #include <iostream> 
 #include <fstream>  
 
 
+
 namespace fs = std::filesystem;
 using json = nlohmann::json;
+
 
 
 #define HEADER_SIZE 18
@@ -22,6 +23,7 @@ using json = nlohmann::json;
 #define TITLE       3
 #define PMC_ID      5   // for xmls
 #define ABSTRACT    8
+
 
 
 // main parser
@@ -89,7 +91,7 @@ int MetadataParser::metadata_parse()
         parse_csv_line(line, parsed_line);
 
         // for testing ranges
-        //if (paper_count < 495) { continue; }
+        if (paper_count < 39950) { continue; }
        
 
         // build text as a string
@@ -168,7 +170,7 @@ int MetadataParser::metadata_parse()
         }
         
         // limit for testing 
-        if (paper_count >= 1000) { break; }
+        if (paper_count >= 40000) { break; }
     }
 
 
@@ -196,20 +198,20 @@ int MetadataParser::metadata_parse()
     // Save lexicon to file
     std::string lexicon_path = "indices/lexicon_cordR1.bin";
     lexicon.save_to_file_binary(lexicon_path);
-    std::string lexicon_text = "indices/lexicon_text.csv";
-    lexicon.save_to_file_csv(lexicon_text);
+    //std::string lexicon_text = "indices/lexicon_text.csv";
+    //lexicon.save_to_file_csv(lexicon_text);
     
     // Save forward index to file (binary form)
     std::string forward_index_path = "indices/forward_index_cordR1.bin";
     forward_index.save_to_file(forward_index_path);
-    std::string forward_text = "indices/forward_index_text.txt";
-    forward_index.save_as_text(forward_text, lexicon.get_reverse_lexicon());
+    //std::string forward_text = "indices/forward_index_text.txt";
+    //forward_index.save_as_text(forward_text, lexicon.get_reverse_lexicon());
 
     // save inverted_index to file (binary)
-    std::string inverted_index_path = "indices/inverted_index_cordR1.bin";
-    inverted_index.save_to_file(inverted_index_path);
-    std::string inverted_text = "indices/inverted_index_text.txt";
-    inverted_index.save_as_text(inverted_text,lexicon.get_reverse_lexicon());
+    std::string inverted_index_path = "indices/";
+    inverted_index.save_barrels(inverted_index_path);
+    //std::string inverted_text = "indices/inverted_index_text.txt";
+    //inverted_index.save_as_text(inverted_text,lexicon.get_reverse_lexicon());
 
 
     file.close();
@@ -560,4 +562,7 @@ int MetadataParser::metadata_stats()
     
     return 0;
 }
+
+
+
 

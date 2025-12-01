@@ -5,6 +5,7 @@ from collections import Counter
 
 # Load model ONCE at startup  (this is waaaaay faster!)
 try:
+    #               wanna use en_core_sci_sm    !!!!!
     nlp = spacy.load("en_core_web_sm")
 except OSError:
     print("spacy model not found", file=sys.stderr)
