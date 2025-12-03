@@ -5,29 +5,33 @@
 #include <iostream>
 
 
-
 InvertedIndex::InvertedIndex()
 {
     barrels.reserve(num_barrel);
 }
 
 
-InvertedIndex::InvertedIndex(const std::string& path_barrels_metadata)
+InvertedIndex::InvertedIndex(const std::string& barrel_folder_path)
 {
-    std::ifstream file(path_barrels_metadata, std::ios::binary);
+    std::ifstream file(barrel_folder_path + "barrel_metadata.bin", std::ios::binary);
     if (!file.is_open()) {
-        std::cerr << "Cound not open: " << path_barrels_metadata << '\n';
+        std::cerr << "Cound not open: " << barrel_folder_path << '\n';
         return;
     }
 
-    barrels.reserve(num_barrel);
+    barrels.resize(num_barrel);
 
     // read the terms
-    file.read(reinterpret_cast<char*>(barrels.data()), num_barrel * sizeof(Barrel));
+    if (!file.read(reinterpret_cast<char*>(barrels.data()), num_barrel * sizeof(Barrel)))
+    {
+        std::cerr << "barrel_metadata NOT found in: " << barrel_folder_path << '\n';
+    }
+
+    barrel_path = barrel_folder_path;
 }
 
 
-void InvertedIndex::addEntry(const u32& word_id, const InvertedEntry& entry)
+void InvertedIndex::addEntry(u32 word_id, const InvertedEntry& entry)
 {
     auto it = inverted_index.find(word_id);
     if (it != inverted_index.end()) {       // already exist
@@ -38,7 +42,7 @@ void InvertedIndex::addEntry(const u32& word_id, const InvertedEntry& entry)
     }
 }
 
-void InvertedIndex::add_document(const u32& doc_id, const std::unordered_map<std::string, WordData>& temp_lex)
+void InvertedIndex::add_document(u32 doc_id, const std::unordered_map<std::string, WordData>& temp_lex)
 {
     for (const auto& [word, word_info] : temp_lex) {
         inverted_index[word_info.word_id].push_back( { doc_id, word_info.freq } );
@@ -98,7 +102,7 @@ void InvertedIndex::save_to_file(const std::string& output_path)
 
 
                         // This ouput path should be only folder path
-void InvertedIndex::save_barrels(const std::string& output_folder_path)
+void InvertedIndex::save_barrels()
 {
     // create container for sorted inverted_index
     std::vector<std::pair<u32, std::vector<InvertedEntry>>> sorted;
@@ -143,23 +147,19 @@ void InvertedIndex::save_barrels(const std::string& output_folder_path)
             range_end = sorted.size();
         }
 
-        barrels.push_back({range_start, range_end});
-
-        range_start = range_end;
+        barrels.push_back({range_start, range_end - 1});
 
         // save the barrel to a binary file
         
-        std::ofstream file(output_folder_path + std::to_string(i) + ".bin", std::ios::binary);
+        std::ofstream file(barrel_path + std::to_string(i) + ".bin", std::ios::binary);
         if (!file.is_open()) {
             std::cerr << "Error: Cannot open inverted index barrel file for writing\n";
             return;
         }
 
-        std::ofstream text_file(output_folder_path + std::to_string(i) + ".txt");
-        if (!text_file.is_open()) {
-            std::cerr << "Error: Cannot open invertd index barrel txt file for wriing\n";
-            return;
-        }
+        // the load_from_file func requres a count
+        u32 words_in_barrel = range_end - range_start;
+        file.write(reinterpret_cast<const char*>(&words_in_barrel), sizeof(words_in_barrel));
 
         // write the range
         for (u32 j = range_start; j < range_end; j++) {
@@ -169,34 +169,27 @@ void InvertedIndex::save_barrels(const std::string& output_folder_path)
 
             // write word_id
             file.write(reinterpret_cast<const char*>(&word_id), sizeof(word_id));
-            text_file << word_id << ' ';
 
             // write no of terms
             u32 term_count = static_cast<u32>(terms->size());
             file.write(reinterpret_cast<const char*>(&term_count), sizeof(term_count));
-            text_file << term_count << ' ';
 
             // write all terms
             file.write(reinterpret_cast<const char*>(terms->data()),
                     term_count * sizeof(InvertedEntry));
 
-            for (const auto& [doc_id, freq] : *terms) {
-                text_file<< "( " << doc_id << ", " << freq << " ), ";
-            }
-
-            text_file << '\n';
         }
 
 
-        std::cout << "Inverted Index Barrel No. " << i << " saved to " << output_folder_path << " folder\n"; 
+        std::cout << "Inverted Index Barrel No. " << i << " saved to " << barrel_path << " folder\n"; 
         file.close();
-        text_file.close();
 
+        range_start = range_end;
     }
 
 
     // now write the barrels vector metadata to a file
-    std::ofstream metadata(output_folder_path + "barrel_metadata.bin", std::ios::binary);
+    std::ofstream metadata(barrel_path + "barrel_metadata.bin", std::ios::binary);
     if (!metadata.is_open()) {
         std::cerr << "Error: Cannot open barrel metadata file for writing\n";
         return;
@@ -251,16 +244,16 @@ bool InvertedIndex::load_from_file(const std::string& input_path)
 }
 
 
-bool InvertedIndex::load_barrel(const std::string& input_folder_path, const u32& word_id)
+bool InvertedIndex::load_barrel(u32 word_id)
 {
-
     // detemine the barrel no
     for (u32 i = 0; i < num_barrel; i++) {
-        // TODO: verify ranges (what if word_id is last id ?)
-        if (word_id >= barrels[i].start_word_id && word_id <= barrels[i].end_word_id) {
-            
+        if (word_id >= barrels[i].start_word_id && word_id <= barrels[i].end_word_id) 
+        {
             // load the barrel
-            if (load_from_file(input_folder_path + std::to_string(i) + ".bin")) {
+            if (load_from_file(barrel_path + std::to_string(i) + ".bin")) 
+            {
+                curr_barrel = i;                    // set curr barrel
                 std::cout << "Barrel no. " << i << " Loaded\n";
                 return true;
             }
@@ -333,7 +326,11 @@ void InvertedIndex::print_statistics() const
         }
         
         double avg_postings = static_cast<double>(total_docs) / inverted_index.size();
-        
+
+        if (!barrels.empty() && curr_barrel != UINT32_MAX) {
+            std::cout << "Current Loaded Barrel No: " << curr_barrel << '\n'; 
+        }
+                
         std::cout << "  Total Docs (Repeated):          " << total_docs << '\n';
         std::cout << "  Avg doc per word:   " << avg_postings << '\n';
         std::cout << "  Min docs for a word: " << min_docs << '\n';

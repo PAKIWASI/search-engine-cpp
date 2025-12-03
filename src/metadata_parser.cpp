@@ -67,8 +67,8 @@ int MetadataParser::metadata_parse()
     // initialize Forward Index
     ForwardIndex forward_index;
 
-    // initialize Inverted Index
-    InvertedIndex inverted_index;
+    // initialize Inverted Index (with barrel support)
+    InvertedIndex inverted_index("indices/");
     
 
     std::cout << "\nStarting paper processing...\n";
@@ -195,23 +195,14 @@ int MetadataParser::metadata_parse()
     inverted_index.print_statistics();
     
 
-    // Save lexicon to file
-    std::string lexicon_path = "indices/lexicon_cordR1.bin";
-    lexicon.save_to_file_binary(lexicon_path);
-    //std::string lexicon_text = "indices/lexicon_text.csv";
-    //lexicon.save_to_file_csv(lexicon_text);
+    // Save lexicon to file (binary)
+    lexicon.save_to_file_binary("indices/lexicon_cordR1.bin");
     
     // Save forward index to file (binary form)
-    std::string forward_index_path = "indices/forward_index_cordR1.bin";
-    forward_index.save_to_file(forward_index_path);
-    //std::string forward_text = "indices/forward_index_text.txt";
-    //forward_index.save_as_text(forward_text, lexicon.get_reverse_lexicon());
+    forward_index.save_to_file("indices/forward_index_cordR1.bin");
 
     // save inverted_index to file (binary)
-    std::string inverted_index_path = "indices/";
-    inverted_index.save_barrels(inverted_index_path);
-    //std::string inverted_text = "indices/inverted_index_text.txt";
-    //inverted_index.save_as_text(inverted_text,lexicon.get_reverse_lexicon());
+    inverted_index.save_barrels();
 
 
     file.close();

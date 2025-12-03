@@ -1,8 +1,6 @@
 #include "inverted_index.hpp"
 #include "metadata_parser.hpp"
 
-#include <string>
-
 
 // WARN: will take aprox 8.3 hours on my cpu to get 50k docs on a single thread
 
@@ -18,11 +16,18 @@ int main()
     parser.metadata_parse();
     */
 
-    InvertedIndex ii;
+    std::string path = "indices/";
+    InvertedIndex i(path);
 
-    ii.load_barrel("indices/", 0);
+    i.load_barrel(0);
+    i.print_statistics();
 
-    ii.print_statistics();
+    i.load_barrel(11000);
+    i.print_statistics();
+
+    i.load_barrel(50000);
+    i.print_statistics();
+
 
     return 0;
 }
