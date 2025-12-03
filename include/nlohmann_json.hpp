@@ -15,6 +15,7 @@
  * file docs/README.md.                                                     *
 \****************************************************************************/
 
+
 #ifndef INCLUDE_NLOHMANN_JSON_HPP_
 #define INCLUDE_NLOHMANN_JSON_HPP_
 
@@ -30,6 +31,9 @@
 #include <string> // string, stoi, to_string
 #include <utility> // declval, forward, move, pair, swap
 #include <vector> // vector
+
+
+typedef uint32_t uint32_t;
 
 // #include <nlohmann/adl_serializer.hpp>
 //     __ _____ _____ _____

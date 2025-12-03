@@ -1,10 +1,9 @@
 #pragma once
 
-#include <cstdint>
 #include <string>
 #include <unordered_map>
 
-#include "word_data.hpp"
+#include "common_includes.hpp"
 
 
 
@@ -12,14 +11,14 @@ class Lexicon {
 private:
     // word -> (word_id, freq)
     std::unordered_map<std::string, WordData> lexicon;
-    uint32_t next_word_id = 0;
+    u32 next_word_id = 0;
 
     // reverse mapping word_id ->word (needed for visualization)
-    std::unordered_map<uint32_t, std::string> reverse_lex;
+    std::unordered_map<u32, std::string> reverse_lex;
 
     // add or update a word in the lexicon
     // returns the word_id of the word
-    uint32_t add_word(const std::string& word, const uint32_t& freq);
+    u32 add_word(const std::string& word, const u32& freq);
 
 public:
     Lexicon() = default;
@@ -28,12 +27,12 @@ public:
     const WordData* get_word_data(const std::string& word) const;
     
     // get word_id only 
-    uint32_t get_word_id(const std::string& word) const;
+    u32 get_word_id(const std::string& word) const;
     
     // get freq for a word
-    uint32_t get_freq(const std::string& word) const;
+    u32 get_freq(const std::string& word) const;
 
-    std::string* get_word(const uint32_t& word_id);
+    std::string* get_word(const u32& word_id);
     
     // check if word exists
     bool contains(const std::string& word) const;
@@ -47,7 +46,7 @@ public:
         return lexicon;
     }
 
-    const std::unordered_map<uint32_t, std::string>& get_reverse_lexicon() const
+    const std::unordered_map<u32, std::string>& get_reverse_lexicon() const
     {
         return reverse_lex;
     }

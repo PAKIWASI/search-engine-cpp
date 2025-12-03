@@ -1,13 +1,8 @@
 #include "inverted_index.hpp"
-#include "word_data.hpp"
 
 #include <algorithm>
-#include <cstdint>
 #include <fstream>
 #include <iostream>
-#include <string>
-#include <utility>
-#include <vector>
 
 
 

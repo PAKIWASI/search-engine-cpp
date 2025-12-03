@@ -1,9 +1,11 @@
 #pragma once
 
 #include "lexicon.hpp"
+
 #include <string>
 #include <unordered_map>
 #include <cstdio>
+
 
 
 class TextProcessor {
