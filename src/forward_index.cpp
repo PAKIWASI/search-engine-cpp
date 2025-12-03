@@ -8,10 +8,10 @@
 
 
 
-uint32_t ForwardIndex::add_document(const std::string& cord_uid,
+u32 ForwardIndex::add_document(const std::string& cord_uid,
                 const std::unordered_map<std::string, WordData>& temp_lex) 
 {
-    uint32_t doc_id = next_doc_id++;
+    u32 doc_id = next_doc_id++;
     
     doc_metadata[doc_id] = cord_uid;  // store cord_uid
     
@@ -29,7 +29,7 @@ uint32_t ForwardIndex::add_document(const std::string& cord_uid,
     return doc_id;
 }
 
-const std::vector<WordData>* ForwardIndex::get_document_terms(uint32_t doc_id) const 
+const std::vector<WordData>* ForwardIndex::get_document_terms(u32 doc_id) const 
 {
     auto it = forward_index.find(doc_id);
     if (it != forward_index.end()) {
@@ -38,7 +38,7 @@ const std::vector<WordData>* ForwardIndex::get_document_terms(uint32_t doc_id) c
     return nullptr;
 }
 
-const std::string* ForwardIndex::get_doc_cord_uid(uint32_t doc_id) const 
+const std::string* ForwardIndex::get_doc_cord_uid(u32 doc_id) const 
 {
     auto it = doc_metadata.find(doc_id);
     if (it != doc_metadata.end()) {
@@ -58,7 +58,7 @@ void ForwardIndex::save_to_file(const std::string& output_path) const
     }
     
             // write number of documents
-    uint32_t doc_count = static_cast<uint32_t>(forward_index.size());
+    u32 doc_count = static_cast<u32>(forward_index.size());
     file.write(reinterpret_cast<const char*>(&doc_count), sizeof(doc_count));
     
 
@@ -70,12 +70,12 @@ void ForwardIndex::save_to_file(const std::string& output_path) const
         
             // write metadata length and metadata
         const std::string& metadata = doc_metadata.at(doc_id); // coord_uid
-        uint32_t metadata_len = static_cast<uint32_t>(metadata.size());
+        u32 metadata_len = static_cast<u32>(metadata.size());
         file.write(reinterpret_cast<const char*>(&metadata_len), sizeof(metadata_len));
         file.write(metadata.c_str(), metadata_len);
         
             // write number of terms
-        uint32_t term_count = static_cast<uint32_t>(terms.size());
+        u32 term_count = static_cast<u32>(terms.size());
         file.write(reinterpret_cast<const char*>(&term_count), sizeof(term_count));
         
             // write all terms
@@ -101,24 +101,24 @@ bool ForwardIndex::load_from_file(const std::string& input_path)
             // we read in the order that we wrote in binary format
     
     // read number of documents
-    uint32_t doc_count;
+    u32 doc_count;
     file.read(reinterpret_cast<char*>(&doc_count), sizeof(doc_count));
     
     // read each document
-    for (uint32_t i = 0; i < doc_count; ++i) {
+    for (u32 i = 0; i < doc_count; ++i) {
             // read doc_id
-        uint32_t doc_id;
+        u32 doc_id;
         file.read(reinterpret_cast<char*>(&doc_id), sizeof(doc_id));
 
             // read metadata
-        uint32_t metadata_len;
+        u32 metadata_len;
         file.read(reinterpret_cast<char*>(&metadata_len), sizeof(metadata_len));
         std::string metadata(metadata_len, '\0');
         file.read(metadata.data(), metadata_len);
         doc_metadata[doc_id] = metadata;
         
             // read number of terms
-        uint32_t term_count;
+        u32 term_count;
         file.read(reinterpret_cast<char*>(&term_count), sizeof(term_count));
         
             // read all terms
@@ -141,7 +141,7 @@ bool ForwardIndex::load_from_file(const std::string& input_path)
 
 
 void ForwardIndex::save_as_text(const std::string& output_path, 
-                                const std::unordered_map<uint32_t, std::string>& reverse_lex)
+                                const std::unordered_map<u32, std::string>& reverse_lex)
 {
     std::ofstream file(output_path);
     if (!file.is_open()) {
@@ -166,7 +166,7 @@ void ForwardIndex::save_as_text(const std::string& output_path,
     file.close();
 }
 
-uint32_t ForwardIndex::get_total_words(uint32_t doc_id) const 
+u32 ForwardIndex::get_total_words(u32 doc_id) const 
 {
     auto it = forward_index.find(doc_id);
     if (it != forward_index.end()) {

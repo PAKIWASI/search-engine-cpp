@@ -73,13 +73,13 @@ int MetadataParser::metadata_parse()
 
     std::cout << "\nStarting paper processing...\n";
     
-    uint32_t paper_count = 0;
-    uint32_t lemmatize_count = 0;
-    uint32_t failed_count = 0;
-    uint32_t skipped_count = 0;
-    uint32_t pdf_count = 0;
-    uint32_t xml_count = 0;
-    uint32_t not_found = 0;
+    u32 paper_count = 0;
+    u32 lemmatize_count = 0;
+    u32 failed_count = 0;
+    u32 skipped_count = 0;
+    u32 pdf_count = 0;
+    u32 xml_count = 0;
+    u32 not_found = 0;
     
 
     // read all the csv lines
@@ -144,7 +144,7 @@ int MetadataParser::metadata_parse()
                 // get cord_uid for this paper
                 std::string cord_uid = parsed_line.size() > CORD_UID ? parsed_line[CORD_UID] : "";
                 // Build forward index using temp_lex
-                uint32_t doc_id = forward_index.add_document(cord_uid, temp_lex);
+                u32 doc_id = forward_index.add_document(cord_uid, temp_lex);
 
                 // Build inverted index
                 // get word_id, freq from temp lex for each doc
@@ -365,21 +365,21 @@ int MetadataParser::metadata_stats()
     std::cout << "Total fields: " << parsed_line.size() << "\n\n";
 
     // Statistics counters
-    uint32_t total_papers = 0;
-    uint32_t has_title = 0;
-    uint32_t has_abstract = 0;
-    uint32_t has_sha = 0;
-    uint32_t has_pmcid = 0;
+    u32 total_papers = 0;
+    u32 has_title = 0;
+    u32 has_abstract = 0;
+    u32 has_sha = 0;
+    u32 has_pmcid = 0;
     
-    uint32_t found_pdf = 0;
-    uint32_t found_xml = 0;
-    uint32_t found_both = 0;
-    uint32_t found_neither = 0;
+    u32 found_pdf = 0;
+    u32 found_xml = 0;
+    u32 found_both = 0;
+    u32 found_neither = 0;
     
-    uint32_t has_fulltext = 0;  // title + abstract + (pdf or xml)
-    uint32_t has_partial = 0;   // title + abstract only
-    uint32_t has_minimal = 0;   // title or abstract only
-    uint32_t has_nothing = 0;   // no title, no abstract, no full text
+    u32 has_fulltext = 0;  // title + abstract + (pdf or xml)
+    u32 has_partial = 0;   // title + abstract only
+    u32 has_minimal = 0;   // title or abstract only
+    u32 has_nothing = 0;   // no title, no abstract, no full text
     
     // Text length statistics
     uint64_t total_title_chars = 0;
@@ -390,7 +390,7 @@ int MetadataParser::metadata_stats()
     size_t max_abstract_len = 0;
     
     // Field size frequency (for debugging)
-    std::map<size_t, uint32_t> field_count_freq;
+    std::map<size_t, u32> field_count_freq;
     
     std::cout << "Processing papers...\n";
     
@@ -538,7 +538,7 @@ int MetadataParser::metadata_stats()
     std::cout << "\n";
     
     std::cout << "=== PROCESSABLE PAPERS ===\n";
-    uint32_t processable = has_fulltext + has_partial;
+    u32 processable = has_fulltext + has_partial;
     std::cout << "Papers with usable text: " << processable 
               << " (" << (100.0 * processable / total_papers) << "%)\n";
     std::cout << "  (Title+Abstract+Body or Title+Abstract)\n\n";

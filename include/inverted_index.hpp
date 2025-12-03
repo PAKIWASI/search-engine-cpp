@@ -16,12 +16,11 @@ private:
 
     // we will only load the needed barrel into RAM
     struct Barrel {
-        u32 barrel_id;         // also name of barrel file
         u32 start_word_id;
         u32 end_word_id;
     };
 
-    std::vector<Barrel> barrels;
+    std::vector<Barrel> barrels;    // index is barrel id, also name of file
 
 public:
     InvertedIndex();

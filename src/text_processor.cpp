@@ -201,7 +201,7 @@ bool TextProcessor::process_with_daemon(const std::string& text,
             std::string freq_str = line_str.substr(comma_pos + 1);
             
             try {
-                uint32_t freq = std::stoul(freq_str);
+                u32 freq = std::stoul(freq_str);
 
                 temp_lex[word] = {0, freq};         // id = 0 is placeholder
                 

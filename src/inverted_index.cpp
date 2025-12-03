@@ -27,7 +27,7 @@ InvertedIndex::InvertedIndex(const std::string& path_barrels_metadata)
 }
 
 
-void InvertedIndex::addEntry(const uint32_t& word_id, const InvertedEntry& entry)
+void InvertedIndex::addEntry(const u32& word_id, const InvertedEntry& entry)
 {
     auto it = inverted_index.find(word_id);
     if (it != inverted_index.end()) {       // already exist
@@ -38,14 +38,14 @@ void InvertedIndex::addEntry(const uint32_t& word_id, const InvertedEntry& entry
     }
 }
 
-void InvertedIndex::add_document(const uint32_t& doc_id, const std::unordered_map<std::string, WordData>& temp_lex)
+void InvertedIndex::add_document(const u32& doc_id, const std::unordered_map<std::string, WordData>& temp_lex)
 {
     for (const auto& [word, word_info] : temp_lex) {
         inverted_index[word_info.word_id].push_back( { doc_id, word_info.freq } );
     }
 }
 
-const std::vector<InvertedEntry>* InvertedIndex::get_word_terms(uint32_t word_id) const
+const std::vector<InvertedEntry>* InvertedIndex::get_word_terms(u32 word_id) const
 {
     auto it = inverted_index.find(word_id);
     if (it != inverted_index.end()) { // found
@@ -73,7 +73,7 @@ void InvertedIndex::save_to_file(const std::string& output_path)
     }  
 
     // write no of words
-    uint32_t word_count = static_cast<uint32_t>(inverted_index.size());
+    u32 word_count = static_cast<u32>(inverted_index.size());
     file.write(reinterpret_cast<const char*>(&word_count), sizeof(word_count));
 
 
@@ -84,7 +84,7 @@ void InvertedIndex::save_to_file(const std::string& output_path)
         file.write(reinterpret_cast<const char*>(&word_id), sizeof(word_id));
 
         // write no of terms
-        uint32_t term_count = static_cast<uint32_t>(terms.size());
+        u32 term_count = static_cast<u32>(terms.size());
         file.write(reinterpret_cast<const char*>(&term_count), sizeof(term_count));
 
         // write all terms
@@ -101,7 +101,7 @@ void InvertedIndex::save_to_file(const std::string& output_path)
 void InvertedIndex::save_barrels(const std::string& output_folder_path)
 {
     // create container for sorted inverted_index
-    std::vector<std::pair<uint32_t, std::vector<InvertedEntry>>> sorted;
+    std::vector<std::pair<u32, std::vector<InvertedEntry>>> sorted;
     sorted.reserve(inverted_index.size());
 
     // move the vectors out of the map
@@ -131,40 +131,40 @@ void InvertedIndex::save_barrels(const std::string& output_folder_path)
 
     // we have sorted data now
 
-    uint32_t curr_barrel_id = 0;
-    uint32_t range_size = sorted.size() / num_barrel; 
-    uint32_t range_start = 0;
+    u32 range_size = sorted.size() / num_barrel; 
+    u32 range_start = 0;
 
-    for (uint32_t i = 0; i < num_barrel; i++) {
+    for (u32 i = 0; i < num_barrel; i++) {
 
         // create a barrel
 
-        uint32_t range_end = range_start + range_size;
+        u32 range_end = range_start + range_size;
         if (range_end > sorted.size() || i == num_barrel - 1) {
             range_end = sorted.size();
         }
 
-        barrels.push_back({curr_barrel_id, range_start, range_end});
+        barrels.push_back({range_start, range_end});
 
+        range_start = range_end;
 
         // save the barrel to a binary file
         
-        std::ofstream file(output_folder_path + std::to_string(curr_barrel_id) + ".bin", std::ios::binary);
+        std::ofstream file(output_folder_path + std::to_string(i) + ".bin", std::ios::binary);
         if (!file.is_open()) {
             std::cerr << "Error: Cannot open inverted index barrel file for writing\n";
             return;
         }
 
-        std::ofstream text_file(output_folder_path + std::to_string(curr_barrel_id) + ".txt");
+        std::ofstream text_file(output_folder_path + std::to_string(i) + ".txt");
         if (!text_file.is_open()) {
             std::cerr << "Error: Cannot open invertd index barrel txt file for wriing\n";
             return;
         }
 
         // write the range
-        for (uint32_t j = range_start; j < range_end; j++) {
+        for (u32 j = range_start; j < range_end; j++) {
 
-            uint32_t word_id = sorted[j].first;
+            u32 word_id = sorted[j].first;
             std::vector<InvertedEntry>* terms = &sorted[j].second;
 
             // write word_id
@@ -172,7 +172,7 @@ void InvertedIndex::save_barrels(const std::string& output_folder_path)
             text_file << word_id << ' ';
 
             // write no of terms
-            uint32_t term_count = static_cast<uint32_t>(terms->size());
+            u32 term_count = static_cast<u32>(terms->size());
             file.write(reinterpret_cast<const char*>(&term_count), sizeof(term_count));
             text_file << term_count << ' ';
 
@@ -192,8 +192,6 @@ void InvertedIndex::save_barrels(const std::string& output_folder_path)
         file.close();
         text_file.close();
 
-        range_start = range_end;
-        curr_barrel_id++;
     }
 
 
@@ -223,18 +221,18 @@ bool InvertedIndex::load_from_file(const std::string& input_path)
     inverted_index.clear();
 
     // read no of words
-    uint32_t word_count;
+    u32 word_count;
     file.read( reinterpret_cast<char*>(&word_count), sizeof(word_count));
 
     // read each entry
-    for (uint32_t i = 0; i < word_count; i++) {
+    for (u32 i = 0; i < word_count; i++) {
 
         // read word_id
-        uint32_t word_id;
+        u32 word_id;
         file.read(reinterpret_cast<char*>(&word_id), sizeof(word_id));
 
         // read no of terms
-        uint32_t term_count;
+        u32 term_count;
         file.read(reinterpret_cast<char*>(&term_count), sizeof(term_count));
 
         // read all the terms
@@ -253,21 +251,21 @@ bool InvertedIndex::load_from_file(const std::string& input_path)
 }
 
 
-bool InvertedIndex::load_barrel(const std::string& input_folder_path, const uint32_t& word_id)
+bool InvertedIndex::load_barrel(const std::string& input_folder_path, const u32& word_id)
 {
 
     // detemine the barrel no
-    for (const auto& barrel : barrels) {
+    for (u32 i = 0; i < num_barrel; i++) {
         // TODO: verify ranges (what if word_id is last id ?)
-        if (word_id >= barrel.start_word_id && word_id <= barrel.end_word_id) {
+        if (word_id >= barrels[i].start_word_id && word_id <= barrels[i].end_word_id) {
             
             // load the barrel
-            if (load_from_file(input_folder_path + std::to_string(barrel.barrel_id) + ".bin")) {
-                std::cout << "Barrel no. " << barrel.barrel_id << " Loaded\n";
+            if (load_from_file(input_folder_path + std::to_string(i) + ".bin")) {
+                std::cout << "Barrel no. " << i << " Loaded\n";
                 return true;
             }
             else {
-                std::cerr << "Barrel no. " << barrel.barrel_id << " NOT Loaded\n";
+                std::cerr << "Barrel no. " << i << " NOT Loaded\n";
                 return false;
             }
         }
@@ -279,7 +277,7 @@ bool InvertedIndex::load_barrel(const std::string& input_folder_path, const uint
 
 
 void InvertedIndex::save_as_text(const std::string& output_path, 
-                                 const std::unordered_map<uint32_t, std::string>& reverse_lex)
+                                 const std::unordered_map<u32, std::string>& reverse_lex)
 {
     std::ofstream file(output_path);
     if (!file.is_open()) {
@@ -306,11 +304,11 @@ void InvertedIndex::save_as_text(const std::string& output_path,
 
 
 
-uint32_t InvertedIndex::get_total_docs(uint32_t word_id)
+u32 InvertedIndex::get_total_docs(u32 word_id)
 {
     auto it = inverted_index.find(word_id);
     if (it != inverted_index.end()) {       // already exist
-        return static_cast<uint32_t>(it->second.size());
+        return static_cast<u32>(it->second.size());
     }
 
     return 0;

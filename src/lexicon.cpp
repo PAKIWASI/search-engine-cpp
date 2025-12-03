@@ -8,7 +8,7 @@
 
 
 
-uint32_t Lexicon::add_word(const std::string& word, const uint32_t& freq) 
+u32 Lexicon::add_word(const std::string& word, const u32& freq) 
 {
     auto it = lexicon.find(word);
     if (it != lexicon.end()) {
@@ -17,7 +17,7 @@ uint32_t Lexicon::add_word(const std::string& word, const uint32_t& freq)
     }
     else {
 
-        uint32_t word_id = next_word_id++;  // new word, assign new id
+        u32 word_id = next_word_id++;  // new word, assign new id
         
         
         lexicon[word] = { word_id, freq };
@@ -38,7 +38,7 @@ const WordData* Lexicon::get_word_data(const std::string& word) const
     return nullptr;
 }
 
-uint32_t Lexicon::get_word_id(const std::string& word) const 
+u32 Lexicon::get_word_id(const std::string& word) const 
 {
     auto it = lexicon.find(word);
     if (it != lexicon.end()) {
@@ -48,7 +48,7 @@ uint32_t Lexicon::get_word_id(const std::string& word) const
 }
 
 
-std::string* Lexicon::get_word(const uint32_t& word_id)
+std::string* Lexicon::get_word(const u32& word_id)
 {
     auto it = reverse_lex.find(word_id);
     if (it != reverse_lex.end()) {
@@ -59,7 +59,7 @@ std::string* Lexicon::get_word(const uint32_t& word_id)
     }
 }
 
-uint32_t Lexicon::get_freq(const std::string& word) const 
+u32 Lexicon::get_freq(const std::string& word) const 
 {
     auto it = lexicon.find(word);
     if (it != lexicon.end()) {
@@ -152,8 +152,8 @@ bool Lexicon::load_from_file_csv(const std::string& input_path)
             std::getline(ss, freq_str, ',')) {
             
             try {
-                uint32_t word_id = std::stoul(word_id_str);
-                uint32_t freq = std::stoul(freq_str);
+                u32 word_id = std::stoul(word_id_str);
+                u32 freq = std::stoul(freq_str);
                 
                 lexicon[word] = {word_id, freq};
                 
@@ -191,7 +191,7 @@ void Lexicon::save_to_file_binary(const std::string& output_path) const
 
 
     // write no of entries
-    uint32_t num_entries = static_cast<uint32_t>(lexicon.size());
+    u32 num_entries = static_cast<u32>(lexicon.size());
     file.write(reinterpret_cast<const char*>(&num_entries), sizeof(num_entries));
 
     // write all entries (word, word_id, freq)
@@ -220,19 +220,19 @@ bool Lexicon::load_from_file_binary(const std::string& input_path)
     lexicon.clear();
 
     // read no of entries
-    uint32_t num_entries;
+    u32 num_entries;
     file.read(reinterpret_cast<char*>(&num_entries), sizeof(num_entries));
 
     // read each entry
-    for (uint32_t i = 0; i < num_entries; i++) {
+    for (u32 i = 0; i < num_entries; i++) {
         // read word by finding null terminator
         std::string word;
         std::getline(file, word, '\0');
         // read id
-        uint32_t word_id; 
+        u32 word_id; 
         file.read(reinterpret_cast<char*>(&word_id), sizeof(word_id));
         // read freq
-        uint32_t freq;
+        u32 freq;
         file.read(reinterpret_cast<char*>(&freq), sizeof(freq));
 
         // save to lex
