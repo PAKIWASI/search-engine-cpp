@@ -8,8 +8,18 @@
 # configs
 .clangd
 
+
 # python
 python/.venv
+
+
+#web
+package.json
+package-lock.json
+node_modules
+dist
+dist-ssr
+*.local
 
 # IDEs
 .cache
@@ -26,5 +36,14 @@ ipch/
 *.ncb
 *.opensdf
 *.sln.docstates
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 

@@ -556,4 +556,73 @@ int MetadataParser::metadata_stats()
 
 
 
+// Add these static functions to metadata_parser.cpp
+
+std::string MetadataParser::find_fulltext_pdf_static(std::string& sha, const std::string& data_path)
+{
+    if (sha.empty()) { return ""; }
+    
+    std::string first_sha = sha;
+    size_t semi_pos = sha.find(';');
+    if (semi_pos != std::string::npos) {
+        first_sha = sha.substr(0, semi_pos);
+        first_sha.erase(0, first_sha.find_first_not_of(" \t"));
+        first_sha.erase(first_sha.find_last_not_of(" \t") + 1);
+    }
+    
+    std::vector<std::string> pdf_search_paths = {
+        data_path + "/comm_use_subset/pdf_json/" + first_sha + ".json",
+        data_path + "/noncomm_use_subset/pdf_json/" + first_sha + ".json",
+        data_path + "/custom_license/pdf_json/" + first_sha + ".json",
+        data_path + "/biorxiv_medrxiv/pdf_json/" + first_sha + ".json"
+    };
+    
+    for (const auto& path : pdf_search_paths) {
+        if (std::filesystem::exists(path)) {
+            return path;
+        }
+    }
+    
+    return "";
+}
+
+std::string MetadataParser::find_fulltext_xml_static(std::string& pmcid, const std::string& data_path)
+{
+    if (pmcid.empty()) { return ""; }
+    
+    std::vector<std::string> xml_search_paths = {
+        data_path + "/comm_use_subset/pmc_json/" + pmcid + ".xml.json",
+        data_path + "/noncomm_use_subset/pmc_json/" + pmcid + ".xml.json",
+        data_path + "/custom_license/pmc_json/" + pmcid + ".xml.json",
+    };
+    
+    for (const auto& path : xml_search_paths) {
+        if (std::filesystem::exists(path)) {
+            return path;
+        }
+    }
+    
+    return "";
+}
+
+void MetadataParser::extract_body_text_static(const std::string& file_path, std::string& body_text) 
+{
+    if (file_path.empty()) { return; }
+    try {
+        std::ifstream file(file_path);
+        nlohmann::json data = nlohmann::json::parse(file);
+        
+        if (data.contains("body_text") && data["body_text"].is_array()) {
+            for (const auto& section : data["body_text"]) {
+                if (section.contains("text") && section["text"].is_string()) {
+                    body_text += section["text"].get<std::string>() + " ";
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error reading JSON file: " << e.what() << '\n';
+        return;
+    }
+}
+
 

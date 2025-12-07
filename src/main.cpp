@@ -7,26 +7,12 @@
 
 int main()
 {
-    /*
     // builder phase
     const std::string data_path = "data/2020-04-10"; 
 
     MetadataParser parser(data_path);
 
-    parser.metadata_parse();
-    */
-
-    std::string path = "indices/";
-    InvertedIndex i(path);
-
-    i.load_barrel(0);
-    i.print_statistics();
-
-    i.load_barrel(11000);
-    i.print_statistics();
-
-    i.load_barrel(50000);
-    i.print_statistics();
+    parser.metadata_parse_multithreaded(6);
 
 
     return 0;

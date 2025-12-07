@@ -202,4 +202,3 @@ void ForwardIndex::print_statistics() const
 }
 
 
-

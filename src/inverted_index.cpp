@@ -250,7 +250,10 @@ bool InvertedIndex::load_barrel(u32 word_id)
     for (u32 i = 0; i < num_barrel; i++) {
         if (word_id >= barrels[i].start_word_id && word_id <= barrels[i].end_word_id) 
         {
-            // load the barrel
+            // check if we already have that barrel in RAM
+            if (i == curr_barrel) { return true; }
+
+            // if not, load the barrel
             if (load_from_file(barrel_path + std::to_string(i) + ".bin")) 
             {
                 curr_barrel = i;                    // set curr barrel

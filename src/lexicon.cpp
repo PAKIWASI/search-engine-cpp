@@ -8,7 +8,7 @@
 
 
 
-u32 Lexicon::add_word(const std::string& word, const u32& freq) 
+u32 Lexicon::add_word(const std::string& word, u32 freq) 
 {
     auto it = lexicon.find(word);
     if (it != lexicon.end()) {
@@ -48,7 +48,7 @@ u32 Lexicon::get_word_id(const std::string& word) const
 }
 
 
-std::string* Lexicon::get_word(const u32& word_id)
+std::string* Lexicon::get_word(u32 word_id)
 {
     auto it = reverse_lex.find(word_id);
     if (it != reverse_lex.end()) {
