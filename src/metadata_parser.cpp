@@ -91,7 +91,7 @@ int MetadataParser::metadata_parse()
         parse_csv_line(line, parsed_line);
 
         // for testing ranges
-        if (paper_count < 39950) { continue; }
+        //if (paper_count < 39950) { continue; }
        
 
         // build text as a string
@@ -170,7 +170,7 @@ int MetadataParser::metadata_parse()
         }
         
         // limit for testing 
-        if (paper_count >= 40000) { break; }
+        if (paper_count >= 100) { break; }
     }
 
 
