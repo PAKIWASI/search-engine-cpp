@@ -68,6 +68,7 @@ public:
 
     bool load_from_file_binary(const std::string& input_path);
 
+    bool merge_from_file_binary(const std::string& input_path, u32 curr_word_id);
 
     // print top N most frequent words
     void print_top_words(int n) const;

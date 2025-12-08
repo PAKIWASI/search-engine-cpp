@@ -37,6 +37,9 @@ public:
     // Load forward index from file
     bool load_from_file(const std::string& input_path);
 
+
+    bool merge_from_file(const std::string& input_path, u32 first_doc_id); 
+
     // for dubugging, viewing
     void save_as_text(const std::string& output_path, 
                       const std::unordered_map<u32, std::string>& reverse_lex);
@@ -47,6 +50,8 @@ public:
     u32 get_document_count() const { return forward_index.size(); }
     
     void print_statistics() const;
+
+    u32 size() const { return forward_index.size(); }
 
 };
 

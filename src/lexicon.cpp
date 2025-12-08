@@ -246,6 +246,48 @@ bool Lexicon::load_from_file_binary(const std::string& input_path)
     return true;
 }
 
+bool Lexicon::merge_from_file_binary(const std::string& input_path, u32 curr_word_id)
+{
+    std::ifstream file(input_path, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Error: Cannot open Lexicon file for reading\n";
+        return false;
+    }
+
+    // read no of entries
+    u32 num_entries;
+    file.read(reinterpret_cast<char*>(&num_entries), sizeof(num_entries));
+
+    // read each entry
+    for (u32 i = 0; i < num_entries; i++) {
+        // read word by finding null terminator
+        std::string word;
+        std::getline(file, word, '\0');
+        // read id
+        u32 word_id; 
+        file.read(reinterpret_cast<char*>(&word_id), sizeof(word_id));
+        // read freq
+        u32 freq;
+        file.read(reinterpret_cast<char*>(&freq), sizeof(freq));
+
+        // save to lex
+        auto it = lexicon.find(word);
+        if (it != lexicon.end()) { // found
+            it->second.freq += freq;    // update freq 
+        } 
+        else { // not found
+            lexicon[word] = { curr_word_id, freq }; 
+            curr_word_id++; // increment
+        }
+    }
+
+    file.close();
+    std::cout << "Lexicon loaded from " << input_path << '\n';
+    std::cout << "Total unique terms: " << lexicon.size() << '\n';
+
+    return true;
+}
+
 void Lexicon::print_top_words(int n) const 
 {
     std::vector<std::pair<std::string, WordData>> sorted_data(lexicon.begin(), lexicon.end());

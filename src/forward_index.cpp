@@ -139,6 +139,59 @@ bool ForwardIndex::load_from_file(const std::string& input_path)
     return true;
 }
 
+bool ForwardIndex::merge_from_file(const std::string& input_path, u32 first_doc_id) 
+{
+    std::ifstream file(input_path, std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "Error: Cannot open forward index file for reading\n";
+        return false;
+    }
+    
+    // read number of documents
+    u32 doc_count;
+    file.read(reinterpret_cast<char*>(&doc_count), sizeof(doc_count));
+    
+    // read each document
+    for (u32 i = 0; i < doc_count; ++i) {
+        // read doc_id (from file - we'll ignore this)
+        u32 old_doc_id;
+        file.read(reinterpret_cast<char*>(&old_doc_id), sizeof(old_doc_id));
+
+        // read metadata
+        u32 metadata_len;
+        file.read(reinterpret_cast<char*>(&metadata_len), sizeof(metadata_len));
+        std::string metadata(metadata_len, '\0');
+        file.read(metadata.data(), metadata_len);
+        
+        // Store metadata with NEW doc_id
+        doc_metadata[first_doc_id] = metadata;
+        
+        // read number of terms
+        u32 term_count;
+        file.read(reinterpret_cast<char*>(&term_count), sizeof(term_count));
+        
+        // read all terms
+        std::vector<WordData> terms(term_count);
+        file.read(reinterpret_cast<char*>(terms.data()), 
+                 term_count * sizeof(WordData));
+        
+        // add to forward index with NEW doc_id
+        forward_index[first_doc_id] = std::move(terms);
+        
+        // Increment for next document
+        first_doc_id++;
+        
+        if (first_doc_id >= next_doc_id) {
+            next_doc_id = first_doc_id;
+        }
+
+    }
+    
+    file.close();
+    std::cout << "Forward index merged from " << input_path << '\n';
+    return true;
+}
+
 
 void ForwardIndex::save_as_text(const std::string& output_path, 
                                 const std::unordered_map<u32, std::string>& reverse_lex)
