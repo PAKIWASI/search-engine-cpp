@@ -277,8 +277,8 @@ int MetadataParser::metadata_parse_multithreaded(u32 num_threads) {
     
     // Read CSV and enqueue work
     u32 paper_id = 0;
-    const u32 START_FROM = 0;      // Start from first paper
-    const u32 LIMIT_TO = 50000;    // Process up to 50k papers
+    const u32 START_FROM = 5001;      // Start from first paper
+    const u32 LIMIT_TO = 10000;    // Process up to 50k papers
     
     try {
         while (std::getline(file, line) && !shared.should_stop.load()) {
@@ -349,9 +349,9 @@ int MetadataParser::metadata_parse_multithreaded(u32 num_threads) {
     
     // Save results
     try {
-        shared.lexicon.save_to_file_binary("indices/lexicon_cordR1.bin");
-        shared.forward_index.save_to_file("indices/forward_index_cordR1.bin");
-        shared.inverted_index.save_to_file("indices/inverted_index_cordR1.bin");
+        shared.lexicon.save_to_file_binary("indices/2/lexicon_cordR1.bin");
+        shared.forward_index.save_to_file("indices/2/forward_index_cordR1.bin");
+        shared.inverted_index.save_to_file("indices/2/inverted_index_cordR1.bin");
         std::cout << "All indices saved successfully!\n";
     } catch (const std::exception& e) {
         std::cerr << "Error saving indices: " << e.what() << "\n";

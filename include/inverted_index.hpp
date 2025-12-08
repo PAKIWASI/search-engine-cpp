@@ -58,5 +58,7 @@ public:
     u32 get_word_count() const { return inverted_index.size(); } 
 
     void print_statistics() const;
+
+    void clear() { inverted_index.clear(); }
 };
 

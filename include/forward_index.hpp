@@ -47,6 +47,7 @@ public:
     u32 get_document_count() const { return forward_index.size(); }
     
     void print_statistics() const;
+
 };
 
 

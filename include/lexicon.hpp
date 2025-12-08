@@ -74,6 +74,7 @@ public:
     
     // Clear the lexicon
     void clear();
+
 };
 
 

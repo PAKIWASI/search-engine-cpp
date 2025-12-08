@@ -252,8 +252,7 @@ bool InvertedIndex::load_barrel(u32 word_id)
         {
             // check if we already have that barrel in RAM
             if (i == curr_barrel) { return true; }
-
-            // if not, load the barrel
+            // load the barrel
             if (load_from_file(barrel_path + std::to_string(i) + ".bin")) 
             {
                 curr_barrel = i;                    // set curr barrel
