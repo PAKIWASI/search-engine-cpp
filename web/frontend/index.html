@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="./styles.css">
+  <title>CORD-19 Search Engine</title>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>COVID-19 Research Search</h1>
+      <p class="subtitle">Search through thousands of COVID-19 research papers from the CORD-19 dataset</p>
+    </header>
+    
+    <div class="search-container">
+      <input 
+        type="text" 
+        id="searchInput" 
+        placeholder="Search for COVID-19 research papers (e.g., 'vaccine efficacy', 'coronavirus treatment')"
+        autocomplete="off"
+      >
+      <button class="search-button" onclick="performSearch()">Search</button>
+      <div id="suggestions"></div>
+    </div>
+    
+    <div class="query-time" id="queryTime"></div>
+    
+    <div id="resultsContainer" class="results-container">
+      <!-- Results will be inserted here -->
+    </div>
+    
+    <footer>
+      <p>CORD-19 Search Engine v1.0 | Powered by C++ Backend</p>
+      <p>Searching through research papers from the COVID-19 Open Research Dataset</p>
+      <h2>Team</h2>
+      <ul>
+        <li>Wasi ULlah</li>
+        <li>M Ahmed</li>
+        <li>Bilal Ahmed (603)</li>
+      </ul>
+    </footer>
+  </div>
+  
+  <script src="./script.js"></script>
+</body>
+</html>
