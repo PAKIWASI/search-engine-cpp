@@ -8,6 +8,7 @@
 InvertedIndex::InvertedIndex()
 {
     barrels.reserve(num_barrel);
+    barrel_path = "indices/1/";
 }
 
 

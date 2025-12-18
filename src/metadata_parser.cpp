@@ -57,12 +57,17 @@ int MetadataParser::metadata_parse()
     std::unordered_map<std::string, WordData> temp_lex; 
     
 
+    /*
     // initialize TextProcessor with reference to lexicon
     TextProcessor text_processor(
         lexicon,
         "python/.venv/bin/python3", 
         "python/lemmatizer_daemon.py"
     );
+    */
+    // BUG: testing
+    
+    TextProcessor text_processor(lexicon);
     
     // initialize Forward Index
     ForwardIndex forward_index;
@@ -91,7 +96,7 @@ int MetadataParser::metadata_parse()
         parse_csv_line(line, parsed_line);
 
         // for testing ranges
-        if (paper_count < 39950) { continue; }
+        //if (paper_count < 39950) { continue; }
        
 
         // build text as a string
@@ -135,7 +140,9 @@ int MetadataParser::metadata_parse()
         if (!full_text.empty()) { // valid papers
             
             // lemmatize text
-            bool success_lemma = text_processor.lemmatize_text(full_text, temp_lex);
+            //bool success_lemma = text_processor.lemmatize_text(full_text, temp_lex);
+            // BUG: testing cpp lemma
+            bool success_lemma = text_processor.lemmatize_libstemmer(full_text, temp_lex);
 
             if (success_lemma) {
 
@@ -170,7 +177,7 @@ int MetadataParser::metadata_parse()
         }
         
         // limit for testing 
-        if (paper_count >= 40000) { break; }
+        if (paper_count >= 1000) { break; }
     }
 
 
@@ -202,6 +209,7 @@ int MetadataParser::metadata_parse()
     forward_index.save_to_file("indices/forward_index_cordR1.bin");
 
     // save inverted_index to file (binary)
+    //inverted_index.save_to_file("indices/inverted_index_cordR1.bin");
     inverted_index.save_barrels();
 
 

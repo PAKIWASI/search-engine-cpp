@@ -6,6 +6,7 @@
 #include <cstring>
 
 
+
 TextProcessor::TextProcessor(Lexicon& lex,
     const std::string& python_path, 
     const std::string& script_path)
@@ -256,5 +257,37 @@ bool TextProcessor::lemmatize_text(std::string& text,
     
     return success;
 }
+
+
+bool TextProcessor::lemmatize_libstemmer(const std::string& text,
+                            std::unordered_map<std::string, WordData>& temp_lex)
+{
+    temp_lex.clear();
+    
+    if (text.empty()) {
+        return true;
+    }
+    
+    // Use LibStemmer to process text
+    std::unordered_map<std::string, uint32_t> term_frequencies;
+    stemmer.process_text(text, term_frequencies);
+    
+    if (term_frequencies.empty()) {
+        return false;
+    }
+    
+    // Convert to WordData format and update lexicon
+    for (const auto& [term, freq] : term_frequencies) {
+        temp_lex[term] = {0, freq}; // word_id placeholder
+    }
+    
+    // Merge with main lexicon and update IDs
+    lexicon.merge(temp_lex);
+    lexicon.update_ids(temp_lex);
+    
+    return true;
+
+}
+    
 
 

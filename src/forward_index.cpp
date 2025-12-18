@@ -223,7 +223,12 @@ u32 ForwardIndex::get_total_words(u32 doc_id) const
 {
     auto it = forward_index.find(doc_id);
     if (it != forward_index.end()) {
-        return it->second.size();
+        // Sum up all frequencies to get total word count
+        u32 total = 0;
+        for (const auto& word_data : it->second) {
+            total += word_data.freq;
+        }
+        return total;
     }
     else {
         return 0;

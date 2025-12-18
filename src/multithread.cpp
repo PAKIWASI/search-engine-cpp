@@ -62,7 +62,8 @@ private:
     size_t max_size = 10000;  // Limit queue size to prevent memory issues
     
 public:
-    void push(PaperWork work) {
+    void push(PaperWork work) 
+    {
         std::unique_lock<std::mutex> lock(mutex);
         // Block if queue is too large
         cv.wait(lock, [this] { return queue.size() < max_size || done; });
@@ -74,7 +75,8 @@ public:
         cv.notify_one();
     }
     
-    bool pop(PaperWork& work) {
+    bool pop(PaperWork& work) 
+    {
         std::unique_lock<std::mutex> lock(mutex);
         cv.wait(lock, [this] { return !queue.empty() || done; });
         
@@ -89,7 +91,8 @@ public:
         return true;
     }
     
-    void set_done() {
+    void set_done() 
+    {
         {
             std::lock_guard<std::mutex> lock(mutex);
             done = true;
@@ -97,7 +100,8 @@ public:
         cv.notify_all();
     }
     
-    size_t size() {
+    size_t size() 
+    {
         std::lock_guard<std::mutex> lock(mutex);
         return queue.size();
     }
@@ -105,8 +109,8 @@ public:
 
 // Worker thread function
 void worker_thread(WorkQueue& work_queue, SharedData& shared, 
-                   const std::string& data_path, u32 thread_id) {
-    
+                   const std::string& data_path, u32 thread_id) 
+{
     try {
         // Each thread gets its own TextProcessor with its own Python daemon
         TextProcessor text_processor(
@@ -240,8 +244,10 @@ void worker_thread(WorkQueue& work_queue, SharedData& shared,
     }
 }
 
+
 // Main multithreaded parser
-int MetadataParser::metadata_parse_multithreaded(u32 num_threads) {
+int MetadataParser::metadata_parse_multithreaded(u32 num_threads) 
+{
     
     std::ifstream file(data_path + "/metadata.csv");
     if (!file.is_open()) {
