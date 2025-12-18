@@ -1,3 +1,4 @@
+/*
 #include "metadata_parser.hpp"
 #include "search_engine.hpp"
 #include "lexicon.hpp"
@@ -441,6 +442,428 @@ int main(int argc, char* argv[])
     } catch (const std::exception& e) {
         std::cerr << "\n\033[1;31m✗ Fatal Error:\033[0m " << e.what() << "\n";
         return 1;
+    }
+    
+    return 0;
+}
+*/
+
+#include "metadata_parser.hpp"
+#include "search_engine.hpp"
+#include "lexicon.hpp"
+#include "forward_index.hpp"
+#include "inverted_index.hpp"
+#include "semantic_search.hpp"
+#include "word_embeddings.hpp"
+
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <chrono>
+#include <memory>
+#include <cstdlib>
+#include <algorithm>
+#include "nlohmann_json.hpp"
+
+using json = nlohmann::json;
+
+// Global variables for the search engine
+std::unique_ptr<Lexicon> lexicon;
+std::unique_ptr<ForwardIndex> forward_index;
+std::unique_ptr<InvertedIndex> inverted_index;
+std::unique_ptr<SearchEngine> search_engine;
+std::unique_ptr<WordEmbeddings> word_embeddings;
+std::unique_ptr<SemanticSearchEngine> semantic_engine;
+
+// Initialize the search engine
+bool initialize_engine(const std::string& index_path) {
+    try {
+        std::cout << "Loading indices from: " << index_path << std::endl;
+        
+        // Load lexicon
+        lexicon = std::make_unique<Lexicon>();
+        if (!lexicon->load_from_file_binary(index_path + "lexicon_cordR1.bin")) {
+            std::cerr << "Failed to load lexicon" << std::endl;
+            return false;
+        }
+        std::cout << "✓ Loaded lexicon with " << lexicon->size() << " terms" << std::endl;
+        
+        // Load forward index
+        forward_index = std::make_unique<ForwardIndex>();
+        if (!forward_index->load_from_file(index_path + "forward_index_cordR1.bin")) {
+            std::cerr << "Failed to load forward index" << std::endl;
+            return false;
+        }
+        std::cout << "✓ Loaded forward index with " << forward_index->size() << " documents" << std::endl;
+        
+        // Load inverted index
+        inverted_index = std::make_unique<InvertedIndex>(index_path);
+        std::cout << "✓ Loaded inverted index (barrel system)" << std::endl;
+        
+        // Initialize search engine
+        search_engine = std::make_unique<SearchEngine>(*lexicon, *forward_index, *inverted_index);
+        
+        // Try to load word embeddings
+        word_embeddings = std::make_unique<WordEmbeddings>();
+        if (word_embeddings->load_embeddings_binary(index_path + "glove.6B.100d.bin")) {
+            std::cout << "✓ Loaded word embeddings" << std::endl;
+            semantic_engine = std::make_unique<SemanticSearchEngine>(
+                *word_embeddings, *search_engine, *lexicon, *forward_index);
+        } else {
+            std::cout << "✗ Word embeddings not available" << std::endl;
+        }
+        
+        std::cout << "✅ Search engine initialized successfully!" << std::endl;
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error initializing engine: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+// Format search results as JSON
+json format_results(const std::vector<SearchResult>& results, 
+                    const std::string& query, 
+                    long long time_ms) {
+    json j;
+    j["success"] = true;
+    j["query"] = query;
+    j["time_ms"] = time_ms;
+    j["count"] = results.size();
+    
+    json results_array = json::array();
+    for (const auto& result : results) {
+        json r;
+        r["docId"] = result.doc_id;
+        r["score"] = result.score;
+        
+        // Try to get document metadata
+        const DocumentMetadata* meta = forward_index->get_document_metadata(result.doc_id);
+        if (meta) {
+            r["cord_uid"] = meta->cord_uid;
+            r["title"] = meta->title;
+            r["abstract"] = meta->abstract.substr(0, 200) + (meta->abstract.length() > 200 ? "..." : "");
+            r["pmcid"] = meta->pmcid;
+        } else {
+            r["title"] = "Document " + std::to_string(result.doc_id);
+            r["cord_uid"] = "";
+            r["abstract"] = "";
+            r["pmcid"] = "";
+        }
+        
+        // Add snippet from first term frequency
+        if (!result.term_frequencies.empty()) {
+            auto it = result.term_frequencies.begin();
+            std::string* word = lexicon->get_word(it->first);
+            if (word) {
+                r["snippet"] = "Contains '" + *word + "' (" + std::to_string(it->second) + " occurrences)";
+            }
+        } else {
+            r["snippet"] = "No term information available";
+        }
+        
+        results_array.push_back(r);
+    }
+    j["results"] = results_array;
+    
+    return j;
+}
+
+// Search command
+void handle_search(const std::string& query, int max_results = 10) {
+    auto start = std::chrono::high_resolution_clock::now();
+    
+    std::vector<SearchResult> results = search_engine->search(query, max_results, true);
+    
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    
+    json output = format_results(results, query, duration.count());
+    std::cout << output.dump(2) << std::endl;
+}
+
+// Suggestions command
+void handle_suggest(const std::string& query) {
+    // Simple suggestion algorithm based on lexicon
+    json j;
+    j["success"] = true;
+    
+    std::vector<std::string> suggestions;
+    
+    // Get all words from lexicon
+    const auto& lex = lexicon->get_lexicon();
+    
+    // Filter words that start with the query
+    std::string query_lower = query;
+    std::transform(query_lower.begin(), query_lower.end(), query_lower.begin(), ::tolower);
+    
+    for (const auto& [word, data] : lex) {
+        std::string word_lower = word;
+        std::transform(word_lower.begin(), word_lower.end(), word_lower.begin(), ::tolower);
+        
+        if (word_lower.find(query_lower) == 0 && word_lower.length() > query_lower.length()) {
+            suggestions.push_back(word);
+            if (suggestions.size() >= 10) break;
+        }
+    }
+    
+    // Add COVID-19 related suggestions if not enough
+    if (suggestions.size() < 5) {
+        std::vector<std::string> covid_terms = {
+            "covid", "covid-19", "coronavirus", "vaccine", "treatment",
+            "pandemic", "sars", "mers", "infection", "virus",
+            "clinical trial", "research", "study", "paper", "document"
+        };
+        
+        for (const auto& term : covid_terms) {
+            if (term.find(query_lower) != std::string::npos || 
+                query_lower.find(term) != std::string::npos) {
+                suggestions.push_back(term);
+            }
+            if (suggestions.size() >= 10) break;
+        }
+    }
+    
+    // Remove duplicates
+    std::sort(suggestions.begin(), suggestions.end());
+    suggestions.erase(std::unique(suggestions.begin(), suggestions.end()), suggestions.end());
+    
+    j["data"] = suggestions;
+    std::cout << j.dump(2) << std::endl;
+}
+
+// Document command
+void handle_document(int doc_id) {
+    json j;
+    
+    const DocumentMetadata* meta = forward_index->get_document_metadata(doc_id);
+    if (meta) {
+        j["success"] = true;
+        j["docId"] = doc_id;
+        j["cord_uid"] = meta->cord_uid;
+        j["title"] = meta->title;
+        j["abstract"] = meta->abstract;
+        j["pmcid"] = meta->pmcid;
+        
+        // Get document terms
+        const std::vector<WordData>* terms = forward_index->get_document_terms(doc_id);
+        if (terms) {
+            json terms_array = json::array();
+            for (const auto& term : *terms) {
+                std::string* word = lexicon->get_word(term.word_id);
+                if (word) {
+                    json t;
+                    t["word"] = *word;
+                    t["freq"] = term.freq;
+                    terms_array.push_back(t);
+                }
+            }
+            j["terms"] = terms_array;
+            j["total_words"] = forward_index->get_total_words(doc_id);
+        }
+    } else {
+        j["success"] = false;
+        j["error"] = "Document not found";
+        j["docId"] = doc_id;
+    }
+    
+    std::cout << j.dump(2) << std::endl;
+}
+
+// Test command
+void handle_test() {
+    json j;
+    j["success"] = true;
+    j["status"] = "ready";
+    j["documents"] = forward_index->size();
+    j["terms"] = lexicon->size();
+    j["service"] = "CORD-19 Search Engine";
+    j["version"] = "1.0.0";
+    
+    std::cout << j.dump(2) << std::endl;
+}
+
+// Health command
+void handle_health() {
+    json j;
+    j["success"] = true;
+    j["status"] = "online";
+    j["documents"] = forward_index->size();
+    j["terms"] = lexicon->size();
+    j["embeddings_loaded"] = (semantic_engine != nullptr);
+    j["timestamp"] = std::chrono::system_clock::now().time_since_epoch().count();
+    
+    std::cout << j.dump(2) << std::endl;
+}
+
+// Interactive mode (original)
+void interactive_mode() {
+    std::string line;
+    u32 max_results = 10;
+    
+    std::cout << "\n🔍 CORD-19 Search Engine Ready!\n";
+    std::cout << "Type 'search <query>' to search or 'help' for commands\n\n";
+    
+    while (true) {
+        std::cout << "search> ";
+        std::cout.flush();
+        
+        if (!std::getline(std::cin, line)) {
+            break;
+        }
+        
+        // Trim whitespace
+        line.erase(0, line.find_first_not_of(" \t"));
+        line.erase(line.find_last_not_of(" \t") + 1);
+        
+        if (line.empty()) { continue; }
+        
+        std::istringstream iss(line);
+        std::string command;
+        iss >> command;
+        
+        // Convert command to lowercase
+        std::transform(command.begin(), command.end(), command.begin(), ::tolower);
+        
+        if (command == "quit" || command == "exit") {
+            break;
+        }
+        else if (command == "help") {
+            std::cout << "\nCommands:\n";
+            std::cout << "  search <query>     - Search for papers\n";
+            std::cout << "  suggest <query>    - Get search suggestions\n";
+            std::cout << "  doc <id>          - Get document details\n";
+            std::cout << "  health            - Check system health\n";
+            std::cout << "  test              - Test connection\n";
+            std::cout << "  quit/exit         - Exit program\n\n";
+        }
+        else if (command == "search") {
+            std::string query;
+            std::getline(iss, query);
+            
+            // Trim leading whitespace
+            size_t start = query.find_first_not_of(" \t");
+            if (start != std::string::npos) {
+                query = query.substr(start);
+            }
+            
+            if (query.empty()) {
+                std::cout << "Error: Please provide a search query\n";
+                continue;
+            }
+            
+            handle_search(query, max_results);
+        }
+        else if (command == "suggest") {
+            std::string query;
+            std::getline(iss, query);
+            
+            // Trim leading whitespace
+            size_t start = query.find_first_not_of(" \t");
+            if (start != std::string::npos) {
+                query = query.substr(start);
+            }
+            
+            handle_suggest(query);
+        }
+        else if (command == "doc") {
+            int doc_id;
+            if (iss >> doc_id) {
+                handle_document(doc_id);
+            } else {
+                std::cout << "Error: Please provide a document ID\n";
+            }
+        }
+        else if (command == "health") {
+            handle_health();
+        }
+        else if (command == "test") {
+            handle_test();
+        }
+        else {
+            std::cout << "Unknown command: '" << command << "'\n";
+            std::cout << "Type 'help' for available commands\n";
+        }
+    }
+}
+
+int main(int argc, char* argv[]) 
+{
+    // Default index path
+    std::string index_path = "indices/";
+    
+    // Check for index path argument
+    if (argc > 1) {
+        index_path = argv[1];
+        if (index_path.back() != '/') {
+            index_path += '/';
+        }
+    }
+    
+    // Initialize the search engine
+    if (!initialize_engine(index_path)) {
+        std::cerr << "Failed to initialize search engine. Exiting." << std::endl;
+        return 1;
+    }
+    
+    // Check command line arguments for web mode
+    if (argc > 2) {
+        std::string command = argv[2];
+        
+        if (command == "search" && argc > 3) {
+            // Web search: main search <query>
+            std::string query;
+            for (int i = 3; i < argc; i++) {
+                if (i > 3) query += " ";
+                query += argv[i];
+            }
+            handle_search(query);
+        }
+        else if (command == "suggest") {
+            // Web suggestions: main suggest <query>
+            std::string query = (argc > 3) ? argv[3] : "";
+            handle_suggest(query);
+        }
+        else if (command == "doc" && argc > 3) {
+            // Web document: main doc <id>
+            try {
+                int doc_id = std::stoi(argv[3]);
+                handle_document(doc_id);
+            } catch (...) {
+                json j;
+                j["success"] = false;
+                j["error"] = "Invalid document ID";
+                std::cout << j.dump(2) << std::endl;
+            }
+        }
+        else if (command == "test") {
+            // Web test: main test
+            handle_test();
+        }
+        else if (command == "health") {
+            // Web health: main health
+            handle_health();
+        }
+        else {
+            // Unknown command or interactive mode
+            if (argc == 2 && std::string(argv[1]) == "--interactive") {
+                interactive_mode();
+            } else {
+                // Print usage
+                std::cout << "Usage:\n";
+                std::cout << "  " << argv[0] << " [index_path] --interactive  # Interactive mode\n";
+                std::cout << "  " << argv[0] << " [index_path] search <query> # Search (web mode)\n";
+                std::cout << "  " << argv[0] << " [index_path] suggest <query># Suggestions (web mode)\n";
+                std::cout << "  " << argv[0] << " [index_path] doc <id>      # Get document (web mode)\n";
+                std::cout << "  " << argv[0] << " [index_path] test          # Test (web mode)\n";
+                std::cout << "  " << argv[0] << " [index_path] health        # Health check (web mode)\n";
+                return 1;
+            }
+        }
+    } else {
+        // No arguments, start interactive mode
+        interactive_mode();
     }
     
     return 0;

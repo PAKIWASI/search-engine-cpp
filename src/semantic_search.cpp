@@ -43,6 +43,7 @@ std::vector<std::string> SemanticSearchEngine::process_query_tokens(
     return tokens;
 }
 
+// In semantic_search.cpp, update get_document_embedding:
 std::vector<float> SemanticSearchEngine::get_document_embedding(u32 doc_id) {
     // Check cache first
     auto it = doc_embedding_cache.find(doc_id);
@@ -50,48 +51,61 @@ std::vector<float> SemanticSearchEngine::get_document_embedding(u32 doc_id) {
         return it->second;
     }
     
-    // Get document terms from forward index
-    const auto* doc_terms = forward_index.get_document_terms(doc_id);
-    if (doc_terms == nullptr) {
+    // Get document metadata
+    const DocumentMetadata* meta = forward_index.get_document_metadata(doc_id);
+    if (!meta) {
         return std::vector<float>();
     }
     
-    // Extract words from document with weighting
-    std::vector<std::string> words;
-    words.reserve(doc_terms->size() * 3);  // Reserve more space for weighted words
+    // Extract text from document (title + abstract)
+    std::string full_text;
+    if (!meta->title.empty()) {
+        full_text += meta->title + " ";
+    }
+    if (!meta->abstract.empty()) {
+        full_text += meta->abstract;
+    }
     
-    for (const auto& word_data : *doc_terms) {
-        std::string* word = lexicon.get_word(word_data.word_id);
-        if (word) {
-            // Add word with frequency weighting (log scale)
-            u32 weight = std::min(word_data.freq, 5u);  // Cap at 5
-            for (u32 i = 0; i < weight; i++) {
-                words.push_back(*word);
-            }
-            
-            // Also try stemmed version if original not found in embeddings
-            std::string stemmed = stemmer.stem_word(*word);
-            if (stemmed != *word) {
-                const auto* emb = embeddings.get_word_embedding(stemmed);
-                if (emb) {
-                    for (u32 i = 0; i < weight; i++) {
-                        words.push_back(stemmed);
-                    }
-                }
-            }
+    if (full_text.empty()) {
+        return std::vector<float>();
+    }
+    
+    // Simple tokenization (similar to theirs)
+    std::vector<std::string> tokens;
+    std::istringstream iss(full_text);
+    std::string token;
+    
+    while (iss >> token) {
+        // Convert to lowercase
+        std::transform(token.begin(), token.end(), token.begin(),
+                      [](unsigned char c) { return std::tolower(c); });
+        
+        // Remove non-alphanumeric (keep hyphens for medical terms)
+        token.erase(
+            std::remove_if(token.begin(), token.end(),
+                          [](char c) { 
+                              return !std::isalnum(c) && c != '-'; 
+                          }),
+            token.end());
+        
+        if (!token.empty() && token.length() >= 2) {
+            tokens.push_back(token);
         }
     }
     
     // Get average embedding
-    std::vector<float> embedding = embeddings.get_average_embedding(words);
+    std::vector<float> embedding = embeddings.get_average_embedding(tokens);
+    
+    // Check if embedding is valid (not all zeros)
+    bool all_zeros = std::all_of(embedding.begin(), embedding.end(),
+                               [](float f) { return f == 0.0f; });
+    
+    if (all_zeros) {
+        return std::vector<float>(); // Return empty for invalid embeddings
+    }
     
     // Cache it
-    if (!embedding.empty()) {
-        doc_embedding_cache[doc_id] = embedding;
-    } else {
-        std::cout << "  Warning: Could not create embedding for document " << doc_id 
-                  << " (no words in vocabulary)\n";
-    }
+    doc_embedding_cache[doc_id] = embedding;
     
     return embedding;
 }
@@ -106,11 +120,31 @@ std::vector<SemanticSearchResult> SemanticSearchEngine::semantic_search(
     
     std::cout << "\n[Semantic Search] Processing query...\n";
     
-    // Process query tokens
-    std::vector<std::string> query_tokens = process_query_tokens(query);
+    // Simple query tokenization (similar to theirs)
+    std::vector<std::string> query_tokens;
+    std::istringstream iss(query);
+    std::string token;
+    
+    while (iss >> token) {
+        // Convert to lowercase
+        std::transform(token.begin(), token.end(), token.begin(),
+                      [](unsigned char c) { return std::tolower(c); });
+        
+        // Remove non-alphanumeric (keep hyphens)
+        token.erase(
+            std::remove_if(token.begin(), token.end(),
+                          [](char c) { 
+                              return !std::isalnum(c) && c != '-'; 
+                          }),
+            token.end());
+        
+        if (!token.empty() && token.length() >= 2) {
+            query_tokens.push_back(token);
+        }
+    }
     
     if (query_tokens.empty()) {
-        std::cout << "No valid query tokens after processing\n";
+        std::cout << "No valid query tokens\n";
         return results;
     }
     
@@ -121,27 +155,33 @@ std::vector<SemanticSearchResult> SemanticSearchEngine::semantic_search(
     std::cout << "\n";
     
     // Get query embedding
+    std::cout << "[Semantic Search] Computing query embedding...\n";
     std::vector<float> query_embedding = embeddings.get_average_embedding(query_tokens);
     
+    // Check if query embedding is valid
     if (query_embedding.empty()) {
-        std::cout << "Warning: Could not create query embedding (words not in vocabulary)\n";
-        std::cout << "Available vocabulary size: " << embeddings.get_vocabulary_size() << "\n";
+        std::cout << "Warning: Could not create query embedding\n";
+        return results;
+    }
+    
+    bool all_zeros = std::all_of(query_embedding.begin(), query_embedding.end(),
+                               [](float f) { return f == 0.0f; });
+    
+    if (all_zeros) {
+        std::cout << "Warning: Query embedding is zero (words not in vocabulary)\n";
         
-        // Debug: Check which words are not in vocabulary
-        std::cout << "Checking individual words:\n";
+        // Debug: Show which words aren't in vocabulary
+        std::cout << "Words not in embeddings vocabulary:\n";
         for (const auto& token : query_tokens) {
             const auto* emb = embeddings.get_word_embedding(token);
-            if (emb) {
-                std::cout << "  ✓ '" << token << "' has embedding\n";
-            } else {
-                std::cout << "  ✗ '" << token << "' NOT in vocabulary\n";
+            if (!emb) {
+                std::cout << "  - '" << token << "'\n";
             }
         }
         return results;
     }
     
-    std::cout << "[Semantic Search] Query embedding created successfully\n";
-    std::cout << "[Semantic Search] Computing similarity for all documents...\n";
+    std::cout << "[Semantic Search] Scoring all documents...\n";
     
     // Score all documents
     u32 total_docs = forward_index.size();
@@ -159,14 +199,14 @@ std::vector<SemanticSearchResult> SemanticSearchEngine::semantic_search(
         // Compute cosine similarity
         float score = embeddings.cosine_similarity(query_embedding, doc_embedding);
         
-        // Lower threshold to include more results
-        if (score > -1.0f) {  // Changed from 0.0f to -1.0f to include all
+        // Use their simple threshold
+        if (score > 0.0f) {
             SemanticSearchResult result;
             result.doc_id = doc_id;
             
-            const std::string* cord_uid = forward_index.get_doc_cord_uid(doc_id);
-            if (cord_uid) {
-                result.cord_uid = *cord_uid;
+            const DocumentMetadata* meta = forward_index.get_document_metadata(doc_id);
+            if (meta) {
+                result.cord_uid = meta->cord_uid;
             }
             
             result.semantic_score = score;
@@ -191,7 +231,7 @@ std::vector<SemanticSearchResult> SemanticSearchEngine::semantic_search(
     }
     
     std::cout << "[Semantic Search] Found " << valid 
-              << " documents, returning top " 
+              << " semantically similar documents, returning top " 
               << results.size() << "\n";
     
     return results;
@@ -277,7 +317,8 @@ std::vector<SemanticSearchResult> SemanticSearchEngine::hybrid_search(
 void SemanticSearchEngine::display_results(
     const std::vector<SemanticSearchResult>& results,
     const std::string& query,
-    bool verbose) {
+    bool verbose) 
+{
     
     if (results.empty()) {
         std::cout << "\n\033[1;33mNo results found for query: \"" << query << "\"\033[0m\n";
@@ -287,43 +328,122 @@ void SemanticSearchEngine::display_results(
     std::cout << "\n\033[1;32m✓ Found " << results.size() << " result(s) for: \"" 
               << query << "\"\033[0m\n\n";
     
-    std::cout << "┌──────────────────────────────────────────────────────────────────────────────────┐\n";
-    std::cout << "│ \033[1;36mRank │ Semantic │ BM25    │ Combined │ CORD UID                      \033[0m │\n";
-    std::cout << "├──────────────────────────────────────────────────────────────────────────────────┤\n";
-    
     for (size_t i = 0; i < results.size(); ++i) {
         const auto& result = results[i];
         
-        std::cout << "│ " 
-                  << std::setw(4) << std::left << (i + 1) << " │ "
-                  << std::setw(8) << std::fixed << std::setprecision(4) 
-                  << result.semantic_score << " │ "
-                  << std::setw(7) << result.bm25_score << " │ "
-                  << std::setw(8) << result.combined_score << " │ "
-                  << std::setw(30) << std::left 
-                  << (result.cord_uid.empty() ? "N/A" : result.cord_uid.substr(0, 30)) 
-                  << " │\n";
+        // Get document metadata
+        const DocumentMetadata* meta = forward_index.get_document_metadata(result.doc_id);
         
-        if (verbose && i < 5 && !result.term_frequencies.empty()) {
-            std::cout << "│      │          │         │          │ \033[90mMatched terms: \033[0m";
+        // Top border
+        std::cout << "┌──────────────────────────────────────────────────────────────────────────────────┐\n";
+        
+        // Result number and score
+        std::cout << "│ \033[1;36m#" << std::setw(2) << (i + 1) << "\033[0m";
+        std::cout << "  Semantic Score: \033[1m" << std::fixed << std::setprecision(4) 
+                  << result.semantic_score << "\033[0m";
+        
+        // Show BM25 score if available
+        if (result.bm25_score > 0.0f) {
+            std::cout << "  │  BM25: \033[1;33m" << std::fixed << std::setprecision(4) 
+                     << result.bm25_score << "\033[0m";
+        }
+        
+        if (result.combined_score > 0.0f && result.combined_score != result.semantic_score) {
+            std::cout << "  Combined: \033[1;32m" << std::fixed << std::setprecision(4) 
+                     << result.combined_score << "\033[0m";
+        }
+        
+        std::cout << std::string(30, ' ') << "│\n";
+        
+        // Separator
+        std::cout << "├──────────────────────────────────────────────────────────────────────────────────┤\n";
+        
+        // Title
+        std::string title = "[No title available]";
+        if (meta && !meta->title.empty()) {
+            title = meta->title;
+        }
+        
+        if (title.length() > 93) {
+            title = title.substr(0, 90) + "...";
+        }
+        std::cout << "│ \033[1m" << std::setw(93) << std::left << title << "\033[0m │\n";
+        
+        // Abstract (if available)
+        if (meta && !meta->abstract.empty()) {
+            std::cout << "├──────────────────────────────────────────────────────────────────────────────────┤\n";
             
-            bool first = true;
-            u32 count = 0;
-            for (const auto& [word_id, freq] : result.term_frequencies) {
-                if (count >= 5) break;
-                std::string* word = lexicon.get_word(word_id);
-                if (word) {
-                    if (!first) std::cout << ", ";
-                    std::cout << *word << ":" << freq;
-                    first = false;
-                    count++;
+            std::string abstract_preview = meta->abstract;
+            if (!verbose && abstract_preview.length() > 180) {
+                abstract_preview = abstract_preview.substr(0, 177) + "...";
+            }
+            
+            // Wrap abstract text
+            std::stringstream ss(abstract_preview);
+            std::string word;
+            std::string line;
+            size_t line_length = 0;
+            bool first_line = true;
+            
+            while (ss >> word) {
+                if (line_length + word.length() + 1 > 93) {
+                    if (!first_line) {
+                        std::cout << "│ \033[90m" << std::setw(93) << std::left << line << "\033[0m │\n";
+                    } else {
+                        std::cout << "│ \033[90m" << std::setw(93) << std::left << line << "\033[0m │\n";
+                        first_line = false;
+                    }
+                    line = word;
+                    line_length = word.length();
+                } else {
+                    if (!line.empty()) {
+                        line += " ";
+                        line_length++;
+                    }
+                    line += word;
+                    line_length += word.length();
                 }
             }
-            std::cout << " │\n";
+            
+            if (!line.empty()) {
+                std::cout << "│ \033[90m" << std::setw(93) << std::left << line << "\033[0m │\n";
+            }
+            
+            if (!verbose && meta->abstract.length() > 180) {
+                std::cout << "│ \033[90m" << std::setw(93) << std::left << "..." 
+                          << "\033[0m │\n";
+            }
+        }
+        
+        // Separator before metadata
+        std::cout << "├──────────────────────────────────────────────────────────────────────────────────┤\n";
+        
+        // CORD UID
+        std::cout << "│ \033[90mCORD UID:\033[0m ";
+        std::cout << std::setw(85) << std::left << result.cord_uid << " │\n";
+        
+        // PMC ID/URL (if available)
+        if (meta && !meta->pmcid.empty()) {
+            std::cout << "│ \033[90mPMC ID:\033[0m   ";
+            std::cout << std::setw(85) << std::left << meta->pmcid << " │\n";
+        }
+        
+        // Bottom border
+        std::cout << "└──────────────────────────────────────────────────────────────────────────────────┘\n";
+        
+        // Add spacing between results
+        if (i < results.size() - 1) {
+            std::cout << "\n";
         }
     }
     
-    std::cout << "└──────────────────────────────────────────────────────────────────────────────────┘\n";
+    // Summary footer
+    std::cout << "\n";
+    std::cout << "╔════════════════════════════════════════════════════════════════════╗\n";
+    std::cout << "║ " << std::setw(96) << std::left 
+              << ("Showing " + std::to_string(results.size()) + " semantic result(s)") 
+              << " ║\n";
+    std::cout << "╚════════════════════════════════════════════════════════════════════╝\n";
 }
 
 
