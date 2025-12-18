@@ -8,14 +8,16 @@
 InvertedIndex::InvertedIndex()
 {
     barrels.reserve(num_barrel);
+    barrel_path = "indices/";
 }
 
 
 InvertedIndex::InvertedIndex(const std::string& barrel_folder_path)
 {
+    barrel_path = barrel_folder_path;
     std::ifstream file(barrel_folder_path + "barrel_metadata.bin", std::ios::binary);
     if (!file.is_open()) {
-        std::cerr << "Cound not open: " << barrel_folder_path << '\n';
+        std::cerr << "Cound not open: " << barrel_folder_path << " for barrel metadata"<< '\n';
         return;
     }
 
@@ -26,8 +28,6 @@ InvertedIndex::InvertedIndex(const std::string& barrel_folder_path)
     {
         std::cerr << "barrel_metadata NOT found in: " << barrel_folder_path << '\n';
     }
-
-    barrel_path = barrel_folder_path;
 }
 
 
@@ -250,6 +250,8 @@ bool InvertedIndex::load_barrel(u32 word_id)
     for (u32 i = 0; i < num_barrel; i++) {
         if (word_id >= barrels[i].start_word_id && word_id <= barrels[i].end_word_id) 
         {
+            // check if we already have that barrel in RAM
+            if (i == curr_barrel) { return true; }
             // load the barrel
             if (load_from_file(barrel_path + std::to_string(i) + ".bin")) 
             {

@@ -1,3 +1,4 @@
+
 #include "metadata_parser.hpp"
 #include "inverted_index.hpp"
 #include "nlohmann_json.hpp"
@@ -8,28 +9,54 @@
 #include <iostream> 
 #include <fstream>  
 
-
-
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
-
-
 #define HEADER_SIZE 18
 
-// field name to index mapping
+// Field name to index mapping
 #define CORD_UID    0
 #define SHA         1   // for pdfs
 #define TITLE       3
 #define PMC_ID      5   // for xmls
 #define ABSTRACT    8
 
+// Helper function to clean and truncate text
+std::string clean_and_truncate(const std::string& text, size_t max_length) 
+{
+    std::string cleaned = text;
+    
+    // Remove extra whitespace
+    size_t start = cleaned.find_first_not_of(" \t\n\r");
+    size_t end = cleaned.find_last_not_of(" \t\n\r");
+    
+    if (start == std::string::npos) {
+        return "";
+    }
+    
+    cleaned = cleaned.substr(start, end - start + 1);
+    
+    // Replace newlines with spaces
+    std::replace(cleaned.begin(), cleaned.end(), '\n', ' ');
+    std::replace(cleaned.begin(), cleaned.end(), '\r', ' ');
+    std::replace(cleaned.begin(), cleaned.end(), '\t', ' ');
+    
+    // Remove multiple consecutive spaces
+    auto new_end = std::unique(cleaned.begin(), cleaned.end(), 
+        [](char a, char b) { return a == ' ' && b == ' '; });
+    cleaned.erase(new_end, cleaned.end());
+    
+    // Truncate if needed
+    if (cleaned.length() > max_length) {
+        cleaned = cleaned.substr(0, max_length - 3) + "...";
+    }
+    
+    return cleaned;
+}
 
-
-// main parser
+// Main parser
 int MetadataParser::metadata_parse() 
 {
-
     std::ifstream file(data_path + "/metadata.csv"); 
     if (!file.is_open()) {
         std::cout << "Error: can't open metadata.csv\n";
@@ -44,34 +71,28 @@ int MetadataParser::metadata_parse()
         return -1;
     }
 
-    // main vector for storing each parsed csv line
+    // Main vector for storing each parsed csv line
     std::vector<std::string> parsed_line;
 
-    // parse the header (not needed but do it for vibes)
+    // Parse the header
     parse_csv_line(line, parsed_line);
-
-    // initialize Lexicon
+    
+    // Initialize Lexicon
     Lexicon lexicon;
 
-    // store data of curr doc in temp_lex
+    // Store data of current doc in temp_lex
     std::unordered_map<std::string, WordData> temp_lex; 
     
-
-    // initialize TextProcessor with reference to lexicon
-    TextProcessor text_processor(
-        lexicon,
-        "python/.venv/bin/python3", 
-        "python/lemmatizer_daemon.py"
-    );
+    // Initialize TextProcessor
+    TextProcessor text_processor(lexicon);
     
-    // initialize Forward Index
+    // Initialize Forward Index
     ForwardIndex forward_index;
 
-    // initialize Inverted Index (with barrel support)
+    // Initialize Inverted Index (with barrel support)
     InvertedIndex inverted_index("indices/");
     
-
-    std::cout << "\nStarting paper processing...\n";
+    std::cout << "Starting paper processing...\n";
     
     u32 paper_count = 0;
     u32 lemmatize_count = 0;
@@ -80,50 +101,86 @@ int MetadataParser::metadata_parse()
     u32 pdf_count = 0;
     u32 xml_count = 0;
     u32 not_found = 0;
+    u32 missing_metadata = 0;
     
-
-    // read all the csv lines
+    // Read all the csv lines
     while (std::getline(file, line)) 
     {
         paper_count++;
         
-        // parse csv line
+        // Parse csv line
         parse_csv_line(line, parsed_line);
 
-        // for testing ranges
-        //if (paper_count < 39950) { continue; }
-       
+        // Safety check for field count
+        if (parsed_line.size() < HEADER_SIZE) {
+            std::cerr << "Warning: Paper " << paper_count 
+                      << " has only " << parsed_line.size() 
+                      << " fields (expected " << HEADER_SIZE << ")\n";
+            skipped_count++;
+            continue;
+        }
 
-        // build text as a string
+        // Extract metadata FIRST (before processing full text)
+        DocumentMetadata metadata;
+        
+        // Get CORD UID 
+        metadata.cord_uid = parsed_line[CORD_UID];
+        if (metadata.cord_uid.empty()) {
+            std::cerr << "Warning: Paper " << paper_count << " has no CORD UID, skipping\n";
+            skipped_count++;
+            continue;
+        }
+        
+        // Get title (clean it)
+        if (!parsed_line[TITLE].empty()) {
+            metadata.title = clean_and_truncate(parsed_line[TITLE], 500);
+        }
+        
+        // Get abstract (clean it)
+        if (!parsed_line[ABSTRACT].empty()) {
+            metadata.abstract = clean_and_truncate(parsed_line[ABSTRACT], 1000);
+        }
+        
+        // Get pmcid for url 
+        if (parsed_line.size() > PMC_ID) {
+            metadata.pmcid = parsed_line[PMC_ID];
+        }
+
+        
+        // Check if we have at least some metadata
+        if (metadata.title.empty() && metadata.abstract.empty()) {
+            missing_metadata++;
+            std::cout << "Paper No: " << paper_count 
+                      << " (CORD: " << metadata.cord_uid << ") has no title or abstract\n";
+        }
+
+        // Build text for lemmatization
         std::string full_text;
 
-        // add title
-        if (parsed_line.size() > TITLE && !parsed_line[TITLE].empty())
-        {
-            full_text += parsed_line[TITLE];
+        // Add title
+        if (!metadata.title.empty()) {
+            full_text += metadata.title;
             full_text += ' ';
         }
 
-        // add abstract
-        if (parsed_line.size() > ABSTRACT && !parsed_line[ABSTRACT].empty()) 
-        {
-            full_text += parsed_line[ABSTRACT];
+        // Add abstract
+        if (!metadata.abstract.empty()) {
+            full_text += metadata.abstract;
             full_text += ' ';
         }
         
-        // try to find pdfs first (about 38k of em)
+        // Try to find pdfs first
         std::string path_pdf = find_fulltext_pdf(parsed_line[SHA]);
 
-        // if no pdf, try xml (only finding about 800 of em, something wrong with pmcid?)
+        // If no pdf, try xml
         if (path_pdf.empty() && parsed_line.size() > PMC_ID) {
             std::string path_xml = find_fulltext_xml(parsed_line[PMC_ID]);
             if (!path_xml.empty()) {
                 extract_body_text(path_xml, full_text);
                 xml_count++;
             }
-            else {  // no pdf no xml
+            else {
                 not_found++;
-                std::cout << "Paper No: " << paper_count << " full_text not found\n";
             }
         } 
         else if (!path_pdf.empty()) {
@@ -131,59 +188,61 @@ int MetadataParser::metadata_parse()
             pdf_count++;
         }
 
+        if (!full_text.empty()) {
+            // Lemmatize text using LibStemmer 
+            bool success_lemma = text_processor.lemmatize_libstemmer(full_text, temp_lex);
 
-        if (!full_text.empty()) { // valid papers
-            
-            // lemmatize text
-            bool success_lemma = text_processor.lemmatize_text(full_text, temp_lex);
-
-            if (success_lemma) {
-
+            if (success_lemma && !temp_lex.empty()) {
                 lemmatize_count++;
 
-                // get cord_uid for this paper
-                std::string cord_uid = parsed_line.size() > CORD_UID ? parsed_line[CORD_UID] : "";
-                // Build forward index using temp_lex
-                u32 doc_id = forward_index.add_document(cord_uid, temp_lex);
+                // Add document to forward index with COMPLETE metadata
+                u32 doc_id = forward_index.add_document(metadata, temp_lex);
 
                 // Build inverted index
-                // get word_id, freq from temp lex for each doc
-                // get docid from forward_index
                 inverted_index.add_document(doc_id, temp_lex);
-
             } 
             else {
                 failed_count++;
-                std::cout << "Paper No: " << paper_count << " Lemmatization Failed\n";
+                std::cout << "Paper No: " << paper_count 
+                          << " (CORD: " << metadata.cord_uid << ") - Lemmatization Failed\n";
             }
         } 
         else {
             skipped_count++;
-            std::cout << "Paper No: " << paper_count << " Full text empty\n";
+            std::cout << "Paper No: " << paper_count 
+                      << " (CORD: " << metadata.cord_uid << ") - Full text empty\n";
         }
 
-        // progress
-        if (paper_count % 10 == 0) {
-            std::cout << "Progress: " << paper_count << " papers, "
-                      << lemmatize_count << " processed, "
-                      << text_processor.get_lexicon_size() << " unique terms\n";
+        // Progress indicator
+        if (paper_count % 100 == 0) {
+            std::cout << "\n=== Progress Report ===\n";
+            std::cout << "Papers processed: " << paper_count << "\n";
+            std::cout << "Successfully indexed: " << lemmatize_count << "\n";
+            std::cout << "Unique terms: " << text_processor.get_lexicon_size() << "\n";
+            std::cout << "With PDFs: " << pdf_count << "\n";
+            std::cout << "With XMLs: " << xml_count << "\n";
+            std::cout << "Missing full text: " << not_found << "\n";
+            std::cout << "Missing metadata: " << missing_metadata << "\n\n";
         }
         
-        // limit for testing 
-        if (paper_count >= 100) { break; }
+        // Limit for testing
+        if (paper_count >= 1000) { 
+            break; 
+        }
     }
 
-
-    std::cout << "\nPROCESSING SUMMARY\n";
-    std::cout << "Total papers read:       " << paper_count << "\n";
-    std::cout << "Successfully Lemmatized: " << lemmatize_count << "\n";
-    std::cout << "Failed:                  " << failed_count << "\n";
-    std::cout << "Skipped (no text):       " << skipped_count << "\n";
-    std::cout << "Unprocessable:           " << skipped_count << "\n";
-    std::cout << "PDF's Found:             " << pdf_count << "\n";
-    std::cout << "XML's Found:             " << xml_count << "\n";
-    std::cout << "Not Found (No PDF, XML): " << not_found << "\n";
-    std::cout << "Unique terms in lexicon: " << lexicon.size() << "\n";
+    std::cout << "\n";
+    std::cout << "             PROCESSING SUMMARY                                \n";
+    std::cout << "Total papers read:          " << paper_count << "\n";
+    std::cout << "Successfully indexed:       " << lemmatize_count << "\n";
+    std::cout << "Failed to process:          " << failed_count << "\n";
+    std::cout << "Skipped (no text):          " << skipped_count << "\n";
+    std::cout << "Missing title/abstract:     " << missing_metadata << "\n";
+    std::cout << "PDF's found:                " << pdf_count << "\n";
+    std::cout << "XML's found:                " << xml_count << "\n";
+    std::cout << "Not found (no PDF/XML):     " << not_found << "\n";
+    std::cout << "Unique terms in lexicon:    " << lexicon.size() << "\n";
+    std::cout << "\n";
 
     // Print top terms
     lexicon.print_top_words(50);
@@ -191,9 +250,11 @@ int MetadataParser::metadata_parse()
     // Print forward index stats
     forward_index.print_statistics();
 
-    // print inverted_index stats
+    // Print inverted_index stats
     inverted_index.print_statistics();
     
+    std::cout << "\n";
+    std::cout << "             SAVING INDICES                                   \n";
 
     // Save lexicon to file (binary)
     lexicon.save_to_file_binary("indices/lexicon_cordR1.bin");
@@ -201,15 +262,15 @@ int MetadataParser::metadata_parse()
     // Save forward index to file (binary form)
     forward_index.save_to_file("indices/forward_index_cordR1.bin");
 
-    // save inverted_index to file (binary)
+    // Save inverted_index with barrels
     inverted_index.save_barrels();
 
+    std::cout << "\n✓ All indices saved successfully!\n";
+    std::cout << "\nYou can now run the search engine with these indices.\n";
 
     file.close();
     return 0;
 }
-
-
 // Private funcs
 
 // Parse CSV line handling quotes and commas
@@ -555,5 +616,74 @@ int MetadataParser::metadata_stats()
 }
 
 
+
+// Add these static functions to metadata_parser.cpp
+
+std::string MetadataParser::find_fulltext_pdf_static(std::string& sha, const std::string& data_path)
+{
+    if (sha.empty()) { return ""; }
+    
+    std::string first_sha = sha;
+    size_t semi_pos = sha.find(';');
+    if (semi_pos != std::string::npos) {
+        first_sha = sha.substr(0, semi_pos);
+        first_sha.erase(0, first_sha.find_first_not_of(" \t"));
+        first_sha.erase(first_sha.find_last_not_of(" \t") + 1);
+    }
+    
+    std::vector<std::string> pdf_search_paths = {
+        data_path + "/comm_use_subset/pdf_json/" + first_sha + ".json",
+        data_path + "/noncomm_use_subset/pdf_json/" + first_sha + ".json",
+        data_path + "/custom_license/pdf_json/" + first_sha + ".json",
+        data_path + "/biorxiv_medrxiv/pdf_json/" + first_sha + ".json"
+    };
+    
+    for (const auto& path : pdf_search_paths) {
+        if (std::filesystem::exists(path)) {
+            return path;
+        }
+    }
+    
+    return "";
+}
+
+std::string MetadataParser::find_fulltext_xml_static(std::string& pmcid, const std::string& data_path)
+{
+    if (pmcid.empty()) { return ""; }
+    
+    std::vector<std::string> xml_search_paths = {
+        data_path + "/comm_use_subset/pmc_json/" + pmcid + ".xml.json",
+        data_path + "/noncomm_use_subset/pmc_json/" + pmcid + ".xml.json",
+        data_path + "/custom_license/pmc_json/" + pmcid + ".xml.json",
+    };
+    
+    for (const auto& path : xml_search_paths) {
+        if (std::filesystem::exists(path)) {
+            return path;
+        }
+    }
+    
+    return "";
+}
+
+void MetadataParser::extract_body_text_static(const std::string& file_path, std::string& body_text) 
+{
+    if (file_path.empty()) { return; }
+    try {
+        std::ifstream file(file_path);
+        nlohmann::json data = nlohmann::json::parse(file);
+        
+        if (data.contains("body_text") && data["body_text"].is_array()) {
+            for (const auto& section : data["body_text"]) {
+                if (section.contains("text") && section["text"].is_string()) {
+                    body_text += section["text"].get<std::string>() + " ";
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error reading JSON file: " << e.what() << '\n';
+        return;
+    }
+}
 
 

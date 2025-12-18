@@ -13,13 +13,14 @@ add_executable(main ${SRC_FILES} ${HEADER_FILES})
 
 target_include_directories(main PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
-#find_library(STEMMER_LIB stemmer)
-#if(STEMMER_LIB)
-#    message(STATUS "Found libstemmer: ${STEMMER_LIB}")
-#else()
-#    message(FATAL_ERROR "libstemmer not found")
-#endif()
-# Then in your target_link_libraries:
-#target_link_libraries(main ${STEMMER_LIB})
+# configuring libstemmer lib
+find_library(STEMMER_LIB stemmer)
+if(STEMMER_LIB)
+    message(STATUS "Found libstemmer: ${STEMMER_LIB}")
+else()
+    message(FATAL_ERROR "libstemmer not found")
+endif()
+
+target_link_libraries(main ${STEMMER_LIB})
 
 

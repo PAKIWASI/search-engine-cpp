@@ -18,11 +18,11 @@ private:
 
     // add or update a word in the lexicon
     // returns the word_id of the word
-    u32 add_word(const std::string& word, const u32& freq);
 
 public:
     Lexicon() = default;
     
+    u32 add_word(const std::string& word, u32 freq);
         // get word_data for a word 
     const WordData* get_word_data(const std::string& word) const;
     
@@ -32,7 +32,7 @@ public:
     // get freq for a word
     u32 get_freq(const std::string& word) const;
 
-    std::string* get_word(const u32& word_id);
+    std::string* get_word(u32 word_id);
     
     // check if word exists
     bool contains(const std::string& word) const;
@@ -68,12 +68,14 @@ public:
 
     bool load_from_file_binary(const std::string& input_path);
 
+    bool merge_from_file_binary(const std::string& input_path, u32 curr_word_id);
 
     // print top N most frequent words
     void print_top_words(int n) const;
     
     // Clear the lexicon
     void clear();
+
 };
 
 

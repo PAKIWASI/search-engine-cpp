@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common_includes.hpp"
 #include <string>
 #include <vector>
 
@@ -30,6 +31,15 @@ public:
 
     // main file for parsing
     int metadata_parse();
+
+
+// multithreaded version
+    int metadata_parse_multithreaded(u32 num_threads = 8);
+    
+    // Static versions for thread worker access
+    static std::string find_fulltext_pdf_static(std::string& sha, const std::string& data_path);
+    static std::string find_fulltext_xml_static(std::string& pmcid, const std::string& data_path);
+    static void extract_body_text_static(const std::string& file_path, std::string& body_text);
 };
 
 
