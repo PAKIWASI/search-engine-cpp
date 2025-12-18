@@ -8,15 +8,16 @@
 InvertedIndex::InvertedIndex()
 {
     barrels.reserve(num_barrel);
-    barrel_path = "indices/1/";
+    barrel_path = "indices/";
 }
 
 
 InvertedIndex::InvertedIndex(const std::string& barrel_folder_path)
 {
+    barrel_path = barrel_folder_path;
     std::ifstream file(barrel_folder_path + "barrel_metadata.bin", std::ios::binary);
     if (!file.is_open()) {
-        std::cerr << "Cound not open: " << barrel_folder_path << '\n';
+        std::cerr << "Cound not open: " << barrel_folder_path << " for barrel metadata"<< '\n';
         return;
     }
 
@@ -27,8 +28,6 @@ InvertedIndex::InvertedIndex(const std::string& barrel_folder_path)
     {
         std::cerr << "barrel_metadata NOT found in: " << barrel_folder_path << '\n';
     }
-
-    barrel_path = barrel_folder_path;
 }
 
 

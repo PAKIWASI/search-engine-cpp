@@ -56,16 +56,28 @@ std::vector<float> SemanticSearchEngine::get_document_embedding(u32 doc_id) {
         return std::vector<float>();
     }
     
-    // Extract words from document
+    // Extract words from document with weighting
     std::vector<std::string> words;
-    words.reserve(doc_terms->size());
+    words.reserve(doc_terms->size() * 3);  // Reserve more space for weighted words
     
     for (const auto& word_data : *doc_terms) {
         std::string* word = lexicon.get_word(word_data.word_id);
         if (word) {
-            // Add word multiple times based on frequency (weighted averaging)
-            for (u32 i = 0; i < std::min(word_data.freq, 10u); i++) {
+            // Add word with frequency weighting (log scale)
+            u32 weight = std::min(word_data.freq, 5u);  // Cap at 5
+            for (u32 i = 0; i < weight; i++) {
                 words.push_back(*word);
+            }
+            
+            // Also try stemmed version if original not found in embeddings
+            std::string stemmed = stemmer.stem_word(*word);
+            if (stemmed != *word) {
+                const auto* emb = embeddings.get_word_embedding(stemmed);
+                if (emb) {
+                    for (u32 i = 0; i < weight; i++) {
+                        words.push_back(stemmed);
+                    }
+                }
             }
         }
     }
@@ -76,10 +88,15 @@ std::vector<float> SemanticSearchEngine::get_document_embedding(u32 doc_id) {
     // Cache it
     if (!embedding.empty()) {
         doc_embedding_cache[doc_id] = embedding;
+    } else {
+        std::cout << "  Warning: Could not create embedding for document " << doc_id 
+                  << " (no words in vocabulary)\n";
     }
     
     return embedding;
 }
+
+// In semantic_search.cpp, update the semantic_search method:
 
 std::vector<SemanticSearchResult> SemanticSearchEngine::semantic_search(
     const std::string& query, 
@@ -108,9 +125,22 @@ std::vector<SemanticSearchResult> SemanticSearchEngine::semantic_search(
     
     if (query_embedding.empty()) {
         std::cout << "Warning: Could not create query embedding (words not in vocabulary)\n";
+        std::cout << "Available vocabulary size: " << embeddings.get_vocabulary_size() << "\n";
+        
+        // Debug: Check which words are not in vocabulary
+        std::cout << "Checking individual words:\n";
+        for (const auto& token : query_tokens) {
+            const auto* emb = embeddings.get_word_embedding(token);
+            if (emb) {
+                std::cout << "  ✓ '" << token << "' has embedding\n";
+            } else {
+                std::cout << "  ✗ '" << token << "' NOT in vocabulary\n";
+            }
+        }
         return results;
     }
     
+    std::cout << "[Semantic Search] Query embedding created successfully\n";
     std::cout << "[Semantic Search] Computing similarity for all documents...\n";
     
     // Score all documents
@@ -129,7 +159,8 @@ std::vector<SemanticSearchResult> SemanticSearchEngine::semantic_search(
         // Compute cosine similarity
         float score = embeddings.cosine_similarity(query_embedding, doc_embedding);
         
-        if (score > 0.0f) {
+        // Lower threshold to include more results
+        if (score > -1.0f) {  // Changed from 0.0f to -1.0f to include all
             SemanticSearchResult result;
             result.doc_id = doc_id;
             
@@ -151,7 +182,7 @@ std::vector<SemanticSearchResult> SemanticSearchEngine::semantic_search(
         }
     }
     
-    // Sort by semantic score
+    // Sort by semantic score (descending)
     std::sort(results.begin(), results.end());
     
     // Keep top K
@@ -160,11 +191,12 @@ std::vector<SemanticSearchResult> SemanticSearchEngine::semantic_search(
     }
     
     std::cout << "[Semantic Search] Found " << valid 
-              << " documents with similarity > 0, returning top " 
+              << " documents, returning top " 
               << results.size() << "\n";
     
     return results;
 }
+
 
 std::vector<SemanticSearchResult> SemanticSearchEngine::hybrid_search(
     const std::string& query, 

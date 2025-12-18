@@ -7,10 +7,12 @@
 #include <sstream>
 #include <regex>
 
-// Constructor
-LibStemmer::LibStemmer() : stemmer(nullptr) {
+
+
+LibStemmer::LibStemmer() : stemmer(nullptr) 
+{
     stemmer = sb_stemmer_new("english", "UTF_8");
-    if (!stemmer) {
+    if (stemmer == nullptr) {
         std::cerr << "Failed to create stemmer for english\n";
     }
     
@@ -24,12 +26,13 @@ LibStemmer::LibStemmer() : stemmer(nullptr) {
 
 // Destructor
 LibStemmer::~LibStemmer() {
-    if (stemmer) {
+    if (stemmer != nullptr) {
         sb_stemmer_delete(stemmer);
     }
 }
 
-void LibStemmer::init_medical_terms() {
+void LibStemmer::init_medical_terms() 
+{
     medical_preserve = {
         "covid", "covid-19", "covid19", "sars", "sars-cov", "sars-cov-2",
         "mers", "mers-cov", "coronavirus", "coronaviruses",
@@ -59,7 +62,8 @@ void LibStemmer::init_medical_terms() {
     };
 }
 
-void LibStemmer::init_stop_words() {
+void LibStemmer::init_stop_words() 
+{
     stop_words = {
         "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for",
         "of", "with", "by", "about", "against", "between", "into", "through",
@@ -77,7 +81,8 @@ void LibStemmer::init_stop_words() {
     };
 }
 
-void LibStemmer::init_common_words() {
+void LibStemmer::init_common_words() 
+{
     common_words_dict = {
         // Common nouns
         "sequence", "analysis", "structure", "figure", "patient", "model",
@@ -99,7 +104,8 @@ void LibStemmer::init_common_words() {
     };
 }
 
-void LibStemmer::init_stemming_corrections() {
+void LibStemmer::init_stemming_corrections() 
+{
     stemming_corrections = {
         {"sequenc", "sequence"},
         {"analysi", "analysis"},
@@ -140,7 +146,8 @@ void LibStemmer::init_stemming_corrections() {
     };
 }
 
-bool LibStemmer::is_likely_noise(const std::string& text) const {
+bool LibStemmer::is_likely_noise(const std::string& text) const 
+{
     if (text.length() == 1 && text != "a" && text != "i" && 
         medical_abbrev.find(text) == medical_abbrev.end()) {
         return true;
@@ -344,8 +351,9 @@ std::vector<std::string> LibStemmer::stem_words(const std::vector<std::string>& 
 }
 
 // Porter2 style stemmer (optional)
-std::string LibStemmer::porter2_stem(const std::string& word) {
-    if (word.length() < 3) return word;
+std::string LibStemmer::porter2_stem(const std::string& word) 
+{
+    if (word.length() < 3) { return word; }
     
     std::string result = word;
     
@@ -397,3 +405,5 @@ std::string LibStemmer::stem_word_porter2(const std::string& word) {
     
     return stemmed;
 }
+
+

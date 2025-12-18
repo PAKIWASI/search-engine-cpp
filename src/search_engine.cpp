@@ -46,105 +46,8 @@ std::vector<QueryTerm> SearchEngine::process_query(const std::string& query)
     return terms;
 }
 
-std::vector<SearchResult> SearchEngine::single_word_search(const QueryTerm& term, u32 max_results) 
-{
-    std::vector<SearchResult> results;
-    
-    if (!term.found) {
-        return results;
-    }
-    
-    // Load barrel for this word if needed
-    if (!inverted_index.load_barrel(term.word_id)) {
-        return results;
-    }
-    
-    const auto* postings = inverted_index.get_word_terms(term.word_id);
-    if (postings == nullptr) {
-        return results;
-    }
-    
-    for (const auto& entry : *postings) {
-        SearchResult result;
-        result.doc_id = entry.doc_id;
-        result.score = 0.0; // Will be computed during ranking
-        result.term_frequencies[term.word_id] = entry.freq;
-        
-        const std::string* cord_uid = forward_index.get_doc_cord_uid(entry.doc_id);
-        if (cord_uid != nullptr) {
-            result.cord_uid = *cord_uid;
-        }
-        
-        results.push_back(result);
-    }
-    
-    return results;
-}
 
-std::vector<SearchResult> SearchEngine::multi_word_search(const std::vector<QueryTerm>& terms, 
-                                                         u32 max_results) 
-{
-    std::vector<SearchResult> results;
-    
-    // Find documents that contain ALL terms (AND query)
-    std::unordered_map<u32, SearchResult> doc_map;
-    
-    for (const auto& term : terms) {
-        if (!term.found) {
-            // If any term is not found, return empty results for AND query
-            return results;
-        }
-        
-        // Load barrel for this word if needed
-        if (!inverted_index.load_barrel(term.word_id)) {
-            continue;
-        }
-        
-        const auto* postings = inverted_index.get_word_terms(term.word_id);
-        if (postings == nullptr) {
-            continue;
-        }
-        
-        if (doc_map.empty()) {
-            // First term: initialize with all documents
-            for (const auto& entry : *postings) {
-                SearchResult result;
-                result.doc_id = entry.doc_id;
-                result.term_frequencies[term.word_id] = entry.freq;
-                
-                const std::string* cord_uid = forward_index.get_doc_cord_uid(entry.doc_id);
-                if (cord_uid != nullptr) {
-                    result.cord_uid = *cord_uid;
-                }
-                
-                doc_map[entry.doc_id] = result;
-            }
-        } else {
-            // Intersect with existing documents
-            std::unordered_map<u32, SearchResult> new_map;
-            for (const auto& entry : *postings) {
-                auto it = doc_map.find(entry.doc_id);
-                if (it != doc_map.end()) {
-                    it->second.term_frequencies[term.word_id] = entry.freq;
-                    new_map[entry.doc_id] = it->second;
-                }
-            }
-            doc_map.swap(new_map);
-        }
-        
-        // Early exit if no documents match all terms
-        if (doc_map.empty()) {
-            return results;
-        }
-    }
-    
-    // Convert map to vector
-    for (auto& pair : doc_map) {
-        results.push_back(pair.second);
-    }
-    
-    return results;
-}
+
 
 double SearchEngine::compute_tf(u32 term_freq, u32 doc_length) {
     if (doc_length == 0) { return 0.0; }
@@ -289,56 +192,7 @@ std::vector<SearchResult> SearchEngine::search(const std::string& query,
     return results;
 }
 
-void SearchEngine::display_results(const std::vector<SearchResult>& results, 
-                                  const std::string& query,
-                                  bool verbose) {
-    if (results.empty()) {
-        std::cout << "\n\033[1;33mNo results found for query: \"" << query << "\"\033[0m\n";
-        return;
-    }
-    
-    std::cout << "\n\033[1;32m✓ Found " << results.size() << " result(s) for: \"" 
-              << query << "\"\033[0m\n\n";
-    
-    std::cout << "┌────────────────────────────────────────────────────────────────────────┐\n";
-    std::cout << "│ \033[1;36mRank │ Score   │ CORD UID                           │ Matches\033[0m          │\n";
-    std::cout << "├────────────────────────────────────────────────────────────────────────┤\n";
-    
-    for (size_t i = 0; i < results.size(); ++i) {
-        const auto& result = results[i];
-        
-        // Format score
-        char score_str[16];
-        snprintf(score_str, sizeof(score_str), "%.4f", result.score);
-        
-        // Count matching terms
-        u32 match_count = static_cast<u32>(result.term_frequencies.size());
-        
-        std::cout << "│ " 
-                  << std::setw(4) << std::left << (i + 1) << " │ "
-                  << std::setw(7) << std::left << score_str << " │ "
-                  << std::setw(35) << std::left << (result.cord_uid.empty() ? "N/A" : result.cord_uid) << " │ "
-                  << std::setw(8) << std::left << match_count << " terms │\n";
-        
-        if (verbose && i < 5) { // Show details for top 5 in verbose mode
-            std::cout << "│     │         │                                    │ ";
-            std::cout << "\033[90mTerm frequencies: \033[0m";
-            
-            bool first = true;
-            for (const auto& tf_pair : result.term_frequencies) {
-                std::string* word = lexicon.get_word(tf_pair.first);
-                if (word) {
-                    if (!first) std::cout << ", ";
-                    std::cout << *word << ":" << tf_pair.second;
-                    first = false;
-                }
-            }
-            std::cout << " │\n";
-        }
-    }
-    
-    std::cout << "└────────────────────────────────────────────────────────────────────────┘\n";
-}
+
 
 void SearchEngine::print_search_stats(const std::vector<SearchResult>& results,
                                      const std::vector<QueryTerm>& query_terms) 
@@ -409,6 +263,310 @@ void SearchEngine::print_search_stats(const std::vector<SearchResult>& results,
     std::cout << "──────────────────\n";
     std::cout << "  Total documents in index: " << total_documents << "\n";
     std::cout << "  Unique terms in lexicon: " << lexicon.size() << "\n";
+}
+
+
+
+#include "search_engine.hpp"
+#include <algorithm>
+#include <cmath>
+#include <iostream>
+#include <iomanip>
+#include <sstream>
+
+// Helper function to wrap text to specified width
+std::vector<std::string> wrap_text(const std::string& text, size_t width) {
+    std::vector<std::string> lines;
+    std::istringstream words(text);
+    std::string word;
+    std::string current_line;
+    
+    while (words >> word) {
+        if (current_line.length() + word.length() + 1 > width) {
+            if (!current_line.empty()) {
+                lines.push_back(current_line);
+                current_line = word;
+            } else {
+                // Word is longer than width, split it
+                lines.push_back(word.substr(0, width));
+                word = word.substr(width);
+            }
+        } else {
+            if (!current_line.empty()) current_line += " ";
+            current_line += word;
+        }
+    }
+    
+    if (!current_line.empty()) {
+        lines.push_back(current_line);
+    }
+    
+    return lines;
+}
+
+//                                                                          this is the pmc id
+// TODO: convert pmcid to full url : https://pmc.ncbi.nlm.nih.gov/articles/PMC1435788/
+void SearchEngine::display_results(const std::vector<SearchResult>& results, 
+                                  const std::string& query,
+                                  bool verbose) {
+    if (results.empty()) {
+        std::cout << "\n\033[1;33m⚠ No results found for query: \"" << query << "\"\033[0m\n";
+        std::cout << "\nSuggestions:\n";
+        std::cout << "  • Try different keywords\n";
+        std::cout << "  • Use more general terms\n";
+        std::cout << "  • Check spelling\n\n";
+        return;
+    }
+    
+    std::cout << "\n\033[1;32m✓ Found " << results.size() << " result(s) for: \"" 
+              << query << "\"\033[0m\n\n";
+    
+    for (size_t i = 0; i < results.size(); ++i) {
+        const auto& result = results[i];
+        
+        // Top border
+        std::cout << "┌" <<  "┐\n";
+        
+        // Result number and score
+        std::cout << "│ \033[1;36m#" << std::setw(2) << (i + 1) << "\033[0m";
+        std::cout << "  Score: \033[1m" << std::fixed << std::setprecision(4) 
+                  << result.score << "\033[0m";
+        
+        // Show matched terms count
+        u32 match_count = static_cast<u32>(result.term_frequencies.size());
+        std::cout << "  │  Matches: \033[1;32m" << match_count << "\033[0m query term";
+        if (match_count != 1) std::cout << "s";
+        
+        std::cout << std::string(98 - 60, ' ') << "│\n";
+        
+        // Separator
+        std::cout << "├" <<  "┤\n";
+        
+        // Title
+        std::string title = result.title.empty() ? "\033[90m[No title available]\033[0m" : result.title;
+        
+        if (title.length() > 93) {
+            // Wrap long titles
+            auto title_lines = wrap_text(title, 93);
+            for (size_t j = 0; j < std::min(size_t(2), title_lines.size()); j++) {
+                std::cout << "│ \033[1m";
+                std::cout << std::setw(93) << std::left << title_lines[j];
+                std::cout << "\033[0m │\n";
+            }
+            if (title_lines.size() > 2) {
+                std::cout << "│ \033[1m" << std::setw(90) << std::left << "..." 
+                          << "\033[0m    │\n";
+            }
+        } else {
+            std::cout << "│ \033[1m" << std::setw(93) << std::left << title << "\033[0m │\n";
+        }
+        
+        // Abstract (if available and not in verbose mode, show first 2 lines)
+        if (!result.abstract.empty()) {
+            std::cout << "├" <<  "┤\n";
+            
+            std::string abstract_preview = result.abstract;
+            if (!verbose && abstract_preview.length() > 180) {
+                abstract_preview = abstract_preview.substr(0, 177) + "...";
+            }
+            
+            auto abstract_lines = wrap_text(abstract_preview, 93);
+            size_t max_lines = verbose ? abstract_lines.size() : std::min(size_t(2), abstract_lines.size());
+            
+            for (size_t j = 0; j < max_lines; j++) {
+                std::cout << "│ \033[90m";
+                std::cout << std::setw(93) << std::left << abstract_lines[j];
+                std::cout << "\033[0m │\n";
+            }
+            
+            if (!verbose && abstract_lines.size() > 2) {
+                std::cout << "│ \033[90m" << std::setw(93) << std::left << "..." 
+                          << "\033[0m │\n";
+            }
+        }
+        
+        // Separator before metadata
+        std::cout << "├" <<  "┤\n";
+        
+        // CORD UID
+        std::cout << "│ \033[90mCORD UID:\033[0m ";
+        std::cout << std::setw(85) << std::left << result.cord_uid << " │\n";
+        
+        // URL (if available)
+        if (!result.pmcid.empty()) {
+            std::cout << "│ \033[90mURL:\033[0m      ";
+            std::cout << result.pmcid;
+            std::cout << " │\n";
+        }
+        
+        // Matched terms details (verbose mode)
+        if (verbose && match_count > 0) {
+            std::cout << "│ \033[90mMatched terms:\033[0m ";
+            
+            std::vector<std::string> term_details;
+            for (const auto& [word_id, freq] : result.term_frequencies) {
+                std::string* word = lexicon.get_word(word_id);
+                if (word) {
+                    term_details.push_back(*word + ":" + std::to_string(freq));
+                }
+            }
+            
+            std::string terms_str;
+            for (size_t j = 0; j < term_details.size(); j++) {
+                if (j > 0) terms_str += ", ";
+                terms_str += term_details[j];
+            }
+            
+            if (terms_str.length() > 78) {
+                terms_str = terms_str.substr(0, 75) + "...";
+            }
+            
+            std::cout << std::setw(78) << std::left << terms_str << " │\n";
+        }
+        
+        // Bottom border
+        std::cout << "└" << "┘\n";
+        
+        // Add spacing between results
+        if (i < results.size() - 1) {
+            std::cout << "\n";
+        }
+    }
+    
+    // Summary footer
+    std::cout << "\n";
+    std::cout << "╔" <<  "╗\n";
+    std::cout << "║ " << std::setw(96) << std::left 
+              << ("Showing " + std::to_string(results.size()) + " result(s)") 
+              << " ║\n";
+    std::cout << "╚" <<  "╝\n";
+}
+
+// ============================================================================
+// Updated single_word_search to populate metadata
+// ============================================================================
+
+std::vector<SearchResult> SearchEngine::single_word_search(const QueryTerm& term, u32 max_results) 
+{
+    std::vector<SearchResult> results;
+    
+    if (!term.found) {
+        return results;
+    }
+    
+    // Load barrel for this word if needed
+    if (!inverted_index.load_barrel(term.word_id)) {
+        return results;
+    }
+    
+    const auto* postings = inverted_index.get_word_terms(term.word_id);
+    if (postings == nullptr) {
+        return results;
+    }
+    
+    for (const auto& entry : *postings) {
+        SearchResult result;
+        result.doc_id = entry.doc_id;
+        result.score = 0.0;
+        result.term_frequencies[term.word_id] = entry.freq;
+        
+        // Get full document metadata
+        const DocumentMetadata* meta = forward_index.get_document_metadata(entry.doc_id);
+        if (meta) {
+            result.cord_uid = meta->cord_uid;
+            result.title = meta->title;
+            result.abstract = meta->abstract;
+            result.pmcid = meta->pmcid;
+        } else {
+            // Fallback to just CORD UID if metadata not found
+            const std::string* cord_uid = forward_index.get_doc_cord_uid(entry.doc_id);
+            if (cord_uid) {
+                result.cord_uid = *cord_uid;
+            }
+        }
+        
+        results.push_back(result);
+    }
+    
+    return results;
+}
+
+// ============================================================================
+// Updated multi_word_search to populate metadata
+// ============================================================================
+
+std::vector<SearchResult> SearchEngine::multi_word_search(const std::vector<QueryTerm>& terms, 
+                                                         u32 max_results) 
+{
+    std::vector<SearchResult> results;
+    
+    // Find documents that contain ALL terms (AND query)
+    std::unordered_map<u32, SearchResult> doc_map;
+    
+    for (const auto& term : terms) {
+        if (!term.found) {
+            // If any term is not found, return empty results for AND query
+            return results;
+        }
+        
+        // Load barrel for this word if needed
+        if (!inverted_index.load_barrel(term.word_id)) {
+            continue;
+        }
+        
+        const auto* postings = inverted_index.get_word_terms(term.word_id);
+        if (postings == nullptr) {
+            continue;
+        }
+        
+        if (doc_map.empty()) {
+            // First term: initialize with all documents
+            for (const auto& entry : *postings) {
+                SearchResult result;
+                result.doc_id = entry.doc_id;
+                result.term_frequencies[term.word_id] = entry.freq;
+                
+                // Get full metadata
+                const DocumentMetadata* meta = forward_index.get_document_metadata(entry.doc_id);
+                if (meta) {
+                    result.cord_uid = meta->cord_uid;
+                    result.title = meta->title;
+                    result.abstract = meta->abstract;
+                    result.pmcid = meta->pmcid;
+                } else {
+                    const std::string* cord_uid = forward_index.get_doc_cord_uid(entry.doc_id);
+                    if (cord_uid) {
+                        result.cord_uid = *cord_uid;
+                    }
+                }
+                
+                doc_map[entry.doc_id] = result;
+            }
+        } else {
+            // Intersect with existing documents
+            std::unordered_map<u32, SearchResult> new_map;
+            for (const auto& entry : *postings) {
+                auto it = doc_map.find(entry.doc_id);
+                if (it != doc_map.end()) {
+                    it->second.term_frequencies[term.word_id] = entry.freq;
+                    new_map[entry.doc_id] = it->second;
+                }
+            }
+            doc_map.swap(new_map);
+        }
+        
+        // Early exit if no documents match all terms
+        if (doc_map.empty()) {
+            return results;
+        }
+    }
+    
+    // Convert map to vector
+    for (auto& pair : doc_map) {
+        results.push_back(pair.second);
+    }
+    
+    return results;
 }
 
 

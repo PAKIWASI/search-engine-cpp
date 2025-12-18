@@ -1,84 +1,83 @@
+
 #include "forward_index.hpp"
-
-
 #include <fstream>
 #include <iostream>
-#include <algorithm>
-#include <unordered_map>
 
 
-
-u32 ForwardIndex::add_document(const std::string& cord_uid,
+u32 ForwardIndex::add_document(const DocumentMetadata& metadata,
                 const std::unordered_map<std::string, WordData>& temp_lex) 
 {
     u32 doc_id = next_doc_id++;
     
-    doc_metadata[doc_id] = cord_uid;  // store cord_uid
+    doc_metadata[doc_id] = metadata;  // Store complete metadata
     
-    // build term freq vector for this document
     std::vector<WordData> terms;
     terms.reserve(temp_lex.size());
     
-    for (const auto& [word, word_info] : temp_lex) 
-    {
+    for (const auto& [word, word_info] : temp_lex) {
         terms.push_back({word_info.word_id, word_info.freq});
     }
     
-    forward_index[doc_id] = std::move(terms); // dont copy 
-    
+    forward_index[doc_id] = std::move(terms);
     return doc_id;
 }
 
-const std::vector<WordData>* ForwardIndex::get_document_terms(u32 doc_id) const 
-{
-    auto it = forward_index.find(doc_id);
-    if (it != forward_index.end()) {
-        return &it->second;     // return vec of WordData
-    }
-    return nullptr;
-}
-
-const std::string* ForwardIndex::get_doc_cord_uid(u32 doc_id) const 
-{
+const DocumentMetadata* ForwardIndex::get_document_metadata(u32 doc_id) const {
     auto it = doc_metadata.find(doc_id);
     if (it != doc_metadata.end()) {
-        return &it->second;         // return cord_uid (str)
+        return &it->second;
     }
     return nullptr;
 }
 
-// save in binary format for fast lookups
-void ForwardIndex::save_to_file(const std::string& output_path) const 
-{
-                    // we store as binary for fast save/load
+const std::string* ForwardIndex::get_doc_cord_uid(u32 doc_id) const {
+    auto it = doc_metadata.find(doc_id);
+    if (it != doc_metadata.end()) {
+        return &it->second.cord_uid;
+    }
+    return nullptr;
+}
+
+void ForwardIndex::save_to_file(const std::string& output_path) const {
     std::ofstream file(output_path, std::ios::binary);
     if (!file.is_open()) {
         std::cerr << "Error: Cannot open forward index file for writing\n";
         return;
     }
     
-            // write number of documents
     u32 doc_count = static_cast<u32>(forward_index.size());
     file.write(reinterpret_cast<const char*>(&doc_count), sizeof(doc_count));
     
-
-            // write each document
-    for (const auto& [doc_id, terms] : forward_index) 
-    {
-            // write doc_id
+    for (const auto& [doc_id, terms] : forward_index) {
+        // Write doc_id
         file.write(reinterpret_cast<const char*>(&doc_id), sizeof(doc_id));
         
-            // write metadata length and metadata
-        const std::string& metadata = doc_metadata.at(doc_id); // coord_uid
-        u32 metadata_len = static_cast<u32>(metadata.size());
-        file.write(reinterpret_cast<const char*>(&metadata_len), sizeof(metadata_len));
-        file.write(metadata.c_str(), metadata_len);
+        // Write metadata
+        const DocumentMetadata& meta = doc_metadata.at(doc_id);
         
-            // write number of terms
+        // Write cord_uid
+        u32 len = static_cast<u32>(meta.cord_uid.size());
+        file.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        file.write(meta.cord_uid.c_str(), len);
+        
+        // Write title
+        len = static_cast<u32>(meta.title.size());
+        file.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        file.write(meta.title.c_str(), len);
+        
+        // Write abstract
+        len = static_cast<u32>(meta.abstract.size());
+        file.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        file.write(meta.abstract.c_str(), len);
+        
+        // Write pmcid
+        len = static_cast<u32>(meta.pmcid.size());
+        file.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        file.write(meta.pmcid.c_str(), len);
+        
+        // Write terms
         u32 term_count = static_cast<u32>(terms.size());
         file.write(reinterpret_cast<const char*>(&term_count), sizeof(term_count));
-        
-            // write all terms
         file.write(reinterpret_cast<const char*>(terms.data()), 
                    term_count * sizeof(WordData));
     }
@@ -87,9 +86,7 @@ void ForwardIndex::save_to_file(const std::string& output_path) const
     std::cout << "Forward index saved to " << output_path << '\n';
 }
 
-
-bool ForwardIndex::load_from_file(const std::string& input_path) 
-{
+bool ForwardIndex::load_from_file(const std::string& input_path) {
     std::ifstream file(input_path, std::ios::binary);
     if (!file.is_open()) {
         std::cerr << "Error: Cannot open forward index file for reading\n";
@@ -98,35 +95,46 @@ bool ForwardIndex::load_from_file(const std::string& input_path)
     
     forward_index.clear();
     doc_metadata.clear();
-            // we read in the order that we wrote in binary format
     
-    // read number of documents
     u32 doc_count;
     file.read(reinterpret_cast<char*>(&doc_count), sizeof(doc_count));
     
-    // read each document
     for (u32 i = 0; i < doc_count; ++i) {
-            // read doc_id
         u32 doc_id;
         file.read(reinterpret_cast<char*>(&doc_id), sizeof(doc_id));
-
-            // read metadata
-        u32 metadata_len;
-        file.read(reinterpret_cast<char*>(&metadata_len), sizeof(metadata_len));
-        std::string metadata(metadata_len, '\0');
-        file.read(metadata.data(), metadata_len);
-        doc_metadata[doc_id] = metadata;
         
-            // read number of terms
+        DocumentMetadata meta;
+        
+        // Read cord_uid
+        u32 len;
+        file.read(reinterpret_cast<char*>(&len), sizeof(len));
+        meta.cord_uid.resize(len);
+        file.read(&meta.cord_uid[0], len);
+        
+        // Read title
+        file.read(reinterpret_cast<char*>(&len), sizeof(len));
+        meta.title.resize(len);
+        file.read(&meta.title[0], len);
+        
+        // Read abstract
+        file.read(reinterpret_cast<char*>(&len), sizeof(len));
+        meta.abstract.resize(len);
+        file.read(&meta.abstract[0], len);
+        
+        // Read URL
+        file.read(reinterpret_cast<char*>(&len), sizeof(len));
+        meta.pmcid.resize(len);
+        file.read(&meta.pmcid[0], len);
+        
+        doc_metadata[doc_id] = meta;
+        
+        // Read terms
         u32 term_count;
         file.read(reinterpret_cast<char*>(&term_count), sizeof(term_count));
-        
-            // read all terms
         std::vector<WordData> terms(term_count);
         file.read(reinterpret_cast<char*>(terms.data()), 
                  term_count * sizeof(WordData));
         
-        // add to forward index
         forward_index[doc_id] = std::move(terms);
         
         if (doc_id >= next_doc_id) {
@@ -139,85 +147,6 @@ bool ForwardIndex::load_from_file(const std::string& input_path)
     return true;
 }
 
-bool ForwardIndex::merge_from_file(const std::string& input_path, u32 first_doc_id) 
-{
-    std::ifstream file(input_path, std::ios::binary);
-    if (!file.is_open()) {
-        std::cerr << "Error: Cannot open forward index file for reading\n";
-        return false;
-    }
-    
-    // read number of documents
-    u32 doc_count;
-    file.read(reinterpret_cast<char*>(&doc_count), sizeof(doc_count));
-    
-    // read each document
-    for (u32 i = 0; i < doc_count; ++i) {
-        // read doc_id (from file - we'll ignore this)
-        u32 old_doc_id;
-        file.read(reinterpret_cast<char*>(&old_doc_id), sizeof(old_doc_id));
-
-        // read metadata
-        u32 metadata_len;
-        file.read(reinterpret_cast<char*>(&metadata_len), sizeof(metadata_len));
-        std::string metadata(metadata_len, '\0');
-        file.read(metadata.data(), metadata_len);
-        
-        // Store metadata with NEW doc_id
-        doc_metadata[first_doc_id] = metadata;
-        
-        // read number of terms
-        u32 term_count;
-        file.read(reinterpret_cast<char*>(&term_count), sizeof(term_count));
-        
-        // read all terms
-        std::vector<WordData> terms(term_count);
-        file.read(reinterpret_cast<char*>(terms.data()), 
-                 term_count * sizeof(WordData));
-        
-        // add to forward index with NEW doc_id
-        forward_index[first_doc_id] = std::move(terms);
-        
-        // Increment for next document
-        first_doc_id++;
-        
-        if (first_doc_id >= next_doc_id) {
-            next_doc_id = first_doc_id;
-        }
-
-    }
-    
-    file.close();
-    std::cout << "Forward index merged from " << input_path << '\n';
-    return true;
-}
-
-
-void ForwardIndex::save_as_text(const std::string& output_path, 
-                                const std::unordered_map<u32, std::string>& reverse_lex)
-{
-    std::ofstream file(output_path);
-    if (!file.is_open()) {
-        std::cerr << "Error: Cannot open forward index file for writing\n";
-        return;
-    }    
-
-    file << "doc_id: cord_uid -> [ (word_id, word, freq) ]\n";
-
-    for (const auto& [doc_id, word_data] : forward_index) {
-        
-        file << doc_id << ": " << doc_metadata[doc_id] << " -> [ ";
-        
-        for (const auto& [word_id, freq] : word_data) {
-            file << "( " << word_id << ", " << reverse_lex.at(word_id) << ", " << freq << " ), ";
-        }
-
-        file << '\n';
-    }
-
-    std::cout << "Forward index saved to " << output_path << '\n';
-    file.close();
-}
 
 u32 ForwardIndex::get_total_words(u32 doc_id) const 
 {
@@ -260,4 +189,12 @@ void ForwardIndex::print_statistics() const
 }
 
 
+const std::vector<WordData>* ForwardIndex::get_document_terms(u32 doc_id) const 
+{
+    auto it = forward_index.find(doc_id);
+    if (it != forward_index.end()) {
+        return &it->second;     // return vec of WordData
+    }
+    return nullptr;
+}
 

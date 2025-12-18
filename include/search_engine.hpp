@@ -14,11 +14,14 @@
 struct SearchResult {
     u32 doc_id;
     std::string cord_uid;
+    std::string title;        
+    std::string abstract;     
+    std::string pmcid;          
     double score;
-    std::unordered_map<u32, u32> term_frequencies; // word_id -> freq in doc
+    std::unordered_map<u32, u32> term_frequencies;
     
     bool operator<(const SearchResult& other) const {
-        return score < other.score; // for max heap
+        return score < other.score;
     }
 };
 

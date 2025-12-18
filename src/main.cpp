@@ -1,12 +1,16 @@
+#include "metadata_parser.hpp"
 #include "search_engine.hpp"
 #include "lexicon.hpp"
 #include "forward_index.hpp"
 #include "inverted_index.hpp"
+#include "semantic_search.hpp"
+#include "word_embeddings.hpp"
 
 #include <iostream>
 #include <string>
 #include <sstream>
 #include <chrono>
+#include <memory>
 
 void print_banner() {
     std::cout << "\n";
@@ -24,6 +28,7 @@ void print_help() {
     std::cout << "║ SEARCH COMMANDS                                                    ║\n";
     std::cout << "║   search <query>      Search for documents (multi-word supported)  ║\n";
     std::cout << "║   s <query>           Short form of search                         ║\n";
+    std::cout << "║   semantic <query>    Semantic search using word embeddings        ║\n";
     std::cout << "║                                                                    ║\n";
     std::cout << "║ CONFIGURATION                                                      ║\n";
     std::cout << "║   results <n>         Set max results to display (1-100)           ║\n";
@@ -33,6 +38,8 @@ void print_help() {
     std::cout << "║ INFORMATION                                                        ║\n";
     std::cout << "║   stats               Show last search statistics                  ║\n";
     std::cout << "║   info                Show system information                      ║\n";
+    std::cout << "║   embeddings          Show embeddings status                       ║\n";
+    std::cout << "║   check <word>        Check if word exists in lexicon/embeddings   ║\n";
     std::cout << "║   help                Show this help message                       ║\n";
     std::cout << "║                                                                    ║\n";
     std::cout << "║ SYSTEM                                                             ║\n";
@@ -44,12 +51,16 @@ void print_help() {
     std::cout << "  search covid                          # Single-word search\n";
     std::cout << "  search coronavirus vaccine            # Multi-word AND search\n";
     std::cout << "  s sars transmission symptoms          # Short form\n";
+    std::cout << "  semantic viral transmission patterns  # Semantic similarity search\n";
+    std::cout << "  check virus                           # Check word in lexicon\n";
+    std::cout << "  embeddings                            # Show embeddings status\n";
     std::cout << "  results 20                            # Show 20 results\n";
     std::cout << "  verbose on                            # Enable detailed output\n";
     std::cout << "\n";
 }
 
-void print_system_info(const Lexicon& lexicon, const ForwardIndex& forward_index) {
+void print_system_info(const Lexicon& lexicon, const ForwardIndex& forward_index,
+                       WordEmbeddings* embeddings = nullptr) {
     std::cout << "\n╔════════════════════════════════════════════════════════════════════╗\n";
     std::cout << "║                        SYSTEM INFORMATION                          ║\n";
     std::cout << "╚════════════════════════════════════════════════════════════════════╝\n";
@@ -60,13 +71,27 @@ void print_system_info(const Lexicon& lexicon, const ForwardIndex& forward_index
     std::cout << "    Barrel System:       Enabled (4 barrels)\n";
     std::cout << "\n";
     std::cout << "  Ranking Algorithms:\n";
-    std::cout << "    Available:           TF-IDF, BM25\n";
+    std::cout << "    Available:           TF-IDF, BM25, Semantic Embeddings\n";
     std::cout << "    Current:             BM25 (configurable)\n";
     std::cout << "\n";
+    
+    if (embeddings) {
+        std::cout << "  Semantic Features:\n";
+        std::cout << "    Embedding Dimension: " << embeddings->get_dimension() << "\n";
+        std::cout << "    Vocabulary Size:     " << embeddings->get_vocabulary_size() << "\n";
+        std::cout << "    Status:              ✅ Ready for semantic search\n";
+        std::cout << "\n";
+    } else {
+        std::cout << "  Semantic Features:\n";
+        std::cout << "    Status:              ❌ Not available (embeddings not loaded)\n";
+        std::cout << "\n";
+    }
+    
     std::cout << "  Query Features:\n";
     std::cout << "    Single-word:         Supported\n";
     std::cout << "    Multi-word (AND):    Supported\n";
     std::cout << "    Case-sensitive:      No (normalized)\n";
+    std::cout << "    Semantic search:     " << (embeddings ? "Enabled" : "Disabled") << "\n";
     std::cout << "\n";
 }
 
@@ -78,7 +103,8 @@ void clear_screen() {
     #endif
 }
 
-void interactive_mode(SearchEngine& engine, Lexicon& lexicon, ForwardIndex& forward_index) 
+void interactive_mode(SearchEngine& engine, SemanticSearchEngine* semantic_engine,
+                     Lexicon& lexicon, ForwardIndex& forward_index) 
 {
     std::string line;
     u32 max_results = 10;
@@ -86,6 +112,7 @@ void interactive_mode(SearchEngine& engine, Lexicon& lexicon, ForwardIndex& forw
     bool use_bm25 = true;
     
     std::vector<SearchResult> last_results;
+    std::vector<SemanticSearchResult> last_semantic_results;
     std::string last_query;
     std::vector<QueryTerm> last_query_terms;
     
@@ -166,6 +193,40 @@ void interactive_mode(SearchEngine& engine, Lexicon& lexicon, ForwardIndex& forw
                 last_query_terms.push_back(term);
             }
         }
+        else if (command == "semantic") {
+            // Semantic search command
+            if (!semantic_engine) {
+                std::cout << "\033[1;31m✗ Error:\033[0m Semantic search is not available\n";
+                std::cout << "  Word embeddings were not loaded successfully\n";
+                std::cout << "  Check if embeddings.bin exists in the index directory\n";
+                continue;
+            }
+            
+            std::string query;
+            std::getline(iss, query);
+            
+            // Trim leading whitespace
+            size_t start = query.find_first_not_of(" \t");
+            if (start != std::string::npos) {
+                query = query.substr(start);
+            }
+            
+            if (query.empty()) {
+                std::cout << "\033[1;31m✗ Error:\033[0m Please provide a search query\n";
+                std::cout << "  Usage: semantic <query>\n";
+                std::cout << "  Example: semantic viral transmission patterns\n";
+                continue;
+            }
+            
+            last_query = query;
+            std::cout << "\033[1;33m[Semantic Search Mode]\033[0m Processing query...\n";
+            
+            last_semantic_results = semantic_engine->semantic_search(query, max_results);
+            semantic_engine->display_results(last_semantic_results, query, verbose);
+            
+            // Clear BM25 results to avoid confusion
+            last_results.clear();
+        }
         else if (command == "results") {
             u32 n;
             if (iss >> n && n > 0 && n <= 100) {
@@ -210,11 +271,30 @@ void interactive_mode(SearchEngine& engine, Lexicon& lexicon, ForwardIndex& forw
             }
         }
         else if (command == "stats") {
-            if (last_results.empty()) {
+            if (last_results.empty() && last_semantic_results.empty()) {
                 std::cout << "\033[1;33m!\033[0m No search performed yet\n";
-                std::cout << "  Run a search first using: search <query>\n";
-            } else {
+                std::cout << "  Run a search first using: search <query> or semantic <query>\n";
+            } else if (!last_results.empty()) {
                 engine.print_search_stats(last_results, last_query_terms);
+            } else if (!last_semantic_results.empty()) {
+                // Show semantic search stats
+                std::cout << "\n\033[1;36m=== SEMANTIC SEARCH STATISTICS ===\033[0m\n\n";
+                std::cout << "Query: \"" << last_query << "\"\n";
+                std::cout << "Results: " << last_semantic_results.size() << "\n";
+                
+                if (!last_semantic_results.empty()) {
+                    float max_score = last_semantic_results[0].semantic_score;
+                    float min_score = last_semantic_results.back().semantic_score;
+                    float avg_score = 0.0f;
+                    
+                    for (const auto& result : last_semantic_results) {
+                        avg_score += result.semantic_score;
+                    }
+                    avg_score /= last_semantic_results.size();
+                    
+                    std::cout << "Score range: " << min_score << " - " << max_score << "\n";
+                    std::cout << "Average score: " << avg_score << "\n";
+                }
             }
         }
         else {
@@ -223,7 +303,7 @@ void interactive_mode(SearchEngine& engine, Lexicon& lexicon, ForwardIndex& forw
         }
         
         // Display execution time for search commands
-        if (command == "search" || command == "s") {
+        if (command == "search" || command == "s" || command == "semantic") {
             auto end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
             std::cout << "\n⏱  Query completed in " << duration.count() << " ms\n";
@@ -244,8 +324,8 @@ int main(int argc, char* argv[])
         }
     }
     
-    std::cout << "📂 Index Path: " << index_path << "\n";
-    std::cout << "⏳ Loading indices...\n\n";
+    std::cout << " Index Path: " << index_path << "\n";
+    std::cout << " Loading indices...\n\n";
     
     try {
         // Load lexicon
@@ -298,6 +378,27 @@ int main(int argc, char* argv[])
         std::cout << "\n🔍 Initializing search engine...\n";
         SearchEngine search_engine(lexicon, forward_index, inverted_index);
         
+        // TODO: Load word embeddings and initialize semantic search
+        std::unique_ptr<WordEmbeddings> word_embeddings;
+        std::unique_ptr<SemanticSearchEngine> semantic_engine;
+        
+        std::cout << "  Loading word embeddings... ";
+        start = std::chrono::high_resolution_clock::now();
+        word_embeddings = std::make_unique<WordEmbeddings>();
+        if (word_embeddings->load_embeddings_binary(index_path + "glove.6B.100d.bin")) {
+            end = std::chrono::high_resolution_clock::now();
+            duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+            std::cout << "\033[1;32m✓\033[0m (" << word_embeddings->get_vocabulary_size() 
+                      << " embeddings, " << duration.count() << " ms)\n";
+            
+            // Initialize semantic search engine
+            semantic_engine = std::make_unique<SemanticSearchEngine>(
+                *word_embeddings, search_engine, lexicon, forward_index);
+        } else {
+            std::cout << "\033[1;31m✗\033[0m (embeddings.bin not found)\n";
+            std::cout << "  Note: Semantic search will be disabled\n";
+        }
+        
         std::cout << "\n";
         std::cout << "╔════════════════════════════════════════════════════════════════════╗\n";
         std::cout << "║              🚀 Search Engine Ready!                               ║\n";
@@ -313,14 +414,29 @@ int main(int argc, char* argv[])
             }
             
             std::cout << "\n📋 Batch mode query: \"" << query << "\"\n";
-            auto results = search_engine.search(query, 10, true);
-            search_engine.display_results(results, query, false);
+            
+            // Check if it's a semantic query
+            std::string cmd = argv[2];
+            if (cmd == "semantic" && argc > 3 && semantic_engine) {
+                // Semantic search
+                query = "";
+                for (int i = 3; i < argc; i++) {
+                    if (i > 3) { query += " "; }
+                    query += argv[i];
+                }
+                auto results = semantic_engine->semantic_search(query, 10);
+                semantic_engine->display_results(results, query, false);
+            } else {
+                // Regular BM25 search
+                auto results = search_engine.search(query, 10, true);
+                search_engine.display_results(results, query, false);
+            }
             
             return 0;
         }
         
         // Interactive mode
-        interactive_mode(search_engine, lexicon, forward_index);
+        interactive_mode(search_engine, semantic_engine.get(), lexicon, forward_index);
         
     } catch (const std::exception& e) {
         std::cerr << "\n\033[1;31m✗ Fatal Error:\033[0m " << e.what() << "\n";
@@ -329,21 +445,5 @@ int main(int argc, char* argv[])
     
     return 0;
 }
-
-
-// INT MAIN FOR MAKING INDICES
-
-/*
-int main() 
-{
-    
-    MetadataParser parser("data/2020-04-10");
-
-    parser.metadata_parse();
-    
-
-    return 0;
-}
-*/
 
 

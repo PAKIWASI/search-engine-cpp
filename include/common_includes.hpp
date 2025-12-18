@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 
 
@@ -19,3 +20,18 @@ struct InvertedEntry {
 };
 
 
+/*      WE JUST NEED PMC ID
+https://pmc.ncbi.nlm.nih.gov/articles/PMC1435788/
+*/
+
+struct DocumentMetadata {
+    std::string cord_uid;
+    std::string title;
+    std::string abstract;
+    std::string pmcid;
+    
+    DocumentMetadata() = default;
+    DocumentMetadata(const std::string& uid, const std::string& t, 
+                    const std::string& a, const std::string& u)
+        : cord_uid(uid), title(t), abstract(a), pmcid(u) {}
+};

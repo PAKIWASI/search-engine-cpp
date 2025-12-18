@@ -1,3 +1,4 @@
+/*
 #include "metadata_parser.hpp"
 #include "inverted_index.hpp"
 #include "nlohmann_json.hpp"
@@ -367,4 +368,4 @@ int MetadataParser::metadata_parse_multithreaded(u32 num_threads)
     return 0;
 }
 
-
+*/
