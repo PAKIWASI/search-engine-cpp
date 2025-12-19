@@ -16,12 +16,12 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 const CPP_BINARY_PATH = path.join(__dirname, 'main');
 const INDICES_PATH = path.join(__dirname, '../../indices');
 
-console.log('🔍 C++ Binary Path:', CPP_BINARY_PATH);
-console.log('📁 Indices Path:', INDICES_PATH);
+console.log(' C++ Binary Path:', CPP_BINARY_PATH);
+console.log(' Indices Path:', INDICES_PATH);
 
 // Check if binary exists
 if (!fs.existsSync(CPP_BINARY_PATH)) {
-    console.error('❌ ERROR: C++ binary not found at', CPP_BINARY_PATH);
+    console.error(' ERROR: C++ binary not found at', CPP_BINARY_PATH);
     console.error('Please compile your C++ code first:');
     console.error('  cd /path/to/project');
     console.error('  mkdir -p build && cd build');
@@ -33,7 +33,10 @@ if (!fs.existsSync(CPP_BINARY_PATH)) {
 // Function to run C++ program
 function runCpp(args, timeout = 15000) {
     return new Promise((resolve, reject) => {
-        console.log(`🚀 Running: ${CPP_BINARY_PATH} ${INDICES_PATH} ${args.join(' ')}`);
+        console.log(` Running: ${CPP_BINARY_PATH} ${INDICES_PATH} ${args.join(' ')}`);
+        
+        // ADD TIMING HERE: Start measuring
+        const startTime = process.hrtime();
         
         const cppProcess = spawn(CPP_BINARY_PATH, [INDICES_PATH, ...args], {
             cwd: path.dirname(CPP_BINARY_PATH),
@@ -52,33 +55,62 @@ function runCpp(args, timeout = 15000) {
         });
 
         cppProcess.on('close', (code) => {
+            // ADD TIMING HERE: Calculate elapsed time
+            const elapsed = process.hrtime(startTime);
+            const elapsedMs = (elapsed[0] * 1000) + (elapsed[1] / 1000000); // Convert to milliseconds
+            
+            console.log(`⏱️  C++ process took: ${elapsedMs.toFixed(2)} ms`);
+            
             if (code === 0) {
-                console.log(`✅ C++ process exited with code ${code}`);
-                resolve(stdout);
+                console.log(` C++ process exited with code ${code}`);
+                // Include timing in the response
+                resolve({
+                    stdout: stdout,
+                    timing: {
+                        total_ms: elapsedMs,
+                        process_time: elapsedMs
+                    }
+                });
             } else {
-                console.error(`❌ C++ process exited with code ${code}`);
+                console.error(` C++ process exited with code ${code}`);
                 console.error('Stderr:', stderr);
                 reject(new Error(`C++ process failed with code ${code}: ${stderr}`));
             }
         });
 
         cppProcess.on('error', (err) => {
-            console.error('❌ Failed to start C++ process:', err);
+            console.error(' Failed to start C++ process:', err);
             reject(err);
         });
     });
 }
 
 // Parse JSON output from C++
-function parseCppOutput(output) {
+function parseCppOutput(output, timing = {}) {
     try {
-        return JSON.parse(output);
+        const parsed = JSON.parse(output);
+        // Add timing information to the parsed result
+        if (timing && timing.total_ms) {
+            parsed.timing = {
+                ...timing,
+                total_ms: timing.total_ms
+            };
+        }
+        return parsed;
     } catch (e) {
         // Try to extract JSON if there's extra output
         const jsonMatch = output.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
             try {
-                return JSON.parse(jsonMatch[0]);
+                const parsed = JSON.parse(jsonMatch[0]);
+                // Add timing information
+                if (timing && timing.total_ms) {
+                    parsed.timing = {
+                        ...timing,
+                        total_ms: timing.total_ms
+                    };
+                }
+                return parsed;
             } catch (e2) {
                 console.error('Failed to parse JSON:', e2.message);
             }
@@ -88,7 +120,11 @@ function parseCppOutput(output) {
         const lines = output.trim().split('\n').filter(line => line.trim());
         
         if (lines.length === 0) {
-            return { success: false, error: "No results found" };
+            return { 
+                success: false, 
+                error: "No results found",
+                timing: timing
+            };
         }
         
         // Try to parse as search results
@@ -109,7 +145,8 @@ function parseCppOutput(output) {
             query: "search",
             count: results.length,
             results: results,
-            note: "Parsed text output"
+            note: "Parsed text output",
+            timing: timing
         };
     }
 }
@@ -138,22 +175,36 @@ app.get('/api/search', async (req, res) => {
         });
     }
     
-    console.log(`🔍 Searching for: "${query}"`);
+    console.log(` Searching for: "${query}"`);
+    
+    // Measure total server-side time
+    const serverStartTime = process.hrtime();
     
     try {
-        const output = await runCpp(['search', query]);
-        const result = parseCppOutput(output);
+        const result = await runCpp(['search', query]);
+        
+        // Calculate server processing time
+        const serverElapsed = process.hrtime(serverStartTime);
+        const serverTotalMs = (serverElapsed[0] * 1000) + (serverElapsed[1] / 1000000);
+        
+        console.log(`  Total server processing time: ${serverTotalMs.toFixed(2)} ms`);
+        
+        const parsedResult = parseCppOutput(result.stdout, {
+            ...result.timing,
+            server_total_ms: serverTotalMs,
+            cpp_process_ms: result.timing.total_ms
+        });
         
         // Ensure we have results array
-        if (!result.results) {
-            result.results = [];
+        if (!parsedResult.results) {
+            parsedResult.results = [];
         }
         
         // Limit to exactly 10 results
-        result.results = result.results.slice(0, 10);
+        parsedResult.results = parsedResult.results.slice(0, 10);
         
         // Ensure each result has required fields
-        result.results.forEach((item, index) => {
+        parsedResult.results.forEach((item, index) => {
             if (!item.docId) item.docId = index + 1;
             if (!item.score) item.score = 1.0 - (index * 0.1);
             if (!item.title) item.title = `Document ${item.docId}`;
@@ -173,13 +224,30 @@ app.get('/api/search', async (req, res) => {
             }
         });
         
-        result.count = result.results.length;
-        result.query = query;
+        parsedResult.count = parsedResult.results.length;
+        parsedResult.query = query;
         
-        res.json(result);
+        // Add performance summary
+        parsedResult.performance = {
+            cpp_process_time_ms: parsedResult.timing?.cpp_process_ms || result.timing?.total_ms,
+            server_total_time_ms: parsedResult.timing?.server_total_ms || serverTotalMs,
+            query: query,
+            results_count: parsedResult.results.length,
+            timestamp: new Date().toISOString()
+        };
+        
+        console.log(` Search complete for "${query}" - ${parsedResult.results.length} results found`);
+        console.log(` Performance: C++: ${parsedResult.performance.cpp_process_time_ms?.toFixed(2) || 'N/A'} ms | Server: ${parsedResult.performance.server_total_time_ms.toFixed(2)} ms`);
+        
+        res.json(parsedResult);
         
     } catch (error) {
+        // Calculate server error time
+        const serverElapsed = process.hrtime(serverStartTime);
+        const serverTotalMs = (serverElapsed[0] * 1000) + (serverElapsed[1] / 1000000);
+        
         console.error('Search error:', error);
+        console.log(`  Failed after: ${serverTotalMs.toFixed(2)} ms`);
         
         // Provide fallback mock results for testing
         res.json({
@@ -187,6 +255,14 @@ app.get('/api/search', async (req, res) => {
             query: query,
             count: 10,
             note: "Using mock results while C++ backend is being tested",
+            performance: {
+                server_total_time_ms: serverTotalMs,
+                cpp_process_time_ms: null,
+                query: query,
+                results_count: 10,
+                timestamp: new Date().toISOString(),
+                note: "Mock results - timing not from C++"
+            },
             results: Array.from({length: 10}, (_, i) => ({
                 docId: i + 1,
                 score: 1.0 - (i * 0.1),
@@ -207,19 +283,46 @@ app.get('/api/suggest', async (req, res) => {
     if (query.length < 2) {
         return res.json({
             success: true,
-            data: []
+            data: [],
+            performance: {
+                query: query,
+                timestamp: new Date().toISOString()
+            }
         });
     }
     
+    console.log(` Getting suggestions for: "${query}"`);
+    
+    // Measure total server-side time
+    const serverStartTime = process.hrtime();
+    
     try {
-        const output = await runCpp(['suggest', query]);
-        const result = parseCppOutput(output);
+        const result = await runCpp(['suggest', query]);
         
-        if (result.data && Array.isArray(result.data)) {
-            res.json({
+        // Calculate server processing time
+        const serverElapsed = process.hrtime(serverStartTime);
+        const serverTotalMs = (serverElapsed[0] * 1000) + (serverElapsed[1] / 1000000);
+        
+        console.log(`  Suggestions took: ${serverTotalMs.toFixed(2)} ms`);
+        
+        const parsedResult = parseCppOutput(result.stdout, {
+            ...result.timing,
+            server_total_ms: serverTotalMs
+        });
+        
+        let response;
+        if (parsedResult.data && Array.isArray(parsedResult.data)) {
+            response = {
                 success: true,
-                data: result.data.slice(0, 8)
-            });
+                data: parsedResult.data.slice(0, 8),
+                performance: {
+                    cpp_process_time_ms: result.timing.total_ms,
+                    server_total_time_ms: serverTotalMs,
+                    query: query,
+                    suggestions_count: Math.min(parsedResult.data.length, 8),
+                    timestamp: new Date().toISOString()
+                }
+            };
         } else {
             // Generate suggestions based on common COVID terms
             const commonTerms = [
@@ -232,14 +335,30 @@ app.get('/api/suggest', async (req, res) => {
                 .filter(term => term.includes(query.toLowerCase()) || query.toLowerCase().includes(term))
                 .slice(0, 8);
             
-            res.json({
+            response = {
                 success: true,
-                data: suggestions
-            });
+                data: suggestions,
+                performance: {
+                    cpp_process_time_ms: result.timing.total_ms,
+                    server_total_time_ms: serverTotalMs,
+                    query: query,
+                    suggestions_count: suggestions.length,
+                    timestamp: new Date().toISOString(),
+                    note: "Generated from fallback list"
+                }
+            };
         }
         
+        res.json(response);
+        
     } catch (error) {
+        // Calculate server error time
+        const serverElapsed = process.hrtime(serverStartTime);
+        const serverTotalMs = (serverElapsed[0] * 1000) + (serverElapsed[1] / 1000000);
+        
         console.error('Suggest error:', error);
+        console.log(`  Failed after: ${serverTotalMs.toFixed(2)} ms`);
+        
         res.json({
             success: true,
             data: [
@@ -249,7 +368,14 @@ app.get('/api/suggest', async (req, res) => {
                 `coronavirus ${query}`,
                 `covid-19 ${query}`,
                 `${query} research`
-            ].slice(0, 6)
+            ].slice(0, 6),
+            performance: {
+                server_total_time_ms: serverTotalMs,
+                query: query,
+                suggestions_count: 6,
+                timestamp: new Date().toISOString(),
+                note: "Fallback suggestions"
+            }
         });
     }
 });
@@ -258,29 +384,65 @@ app.get('/api/suggest', async (req, res) => {
 app.get('/api/doc/:id', async (req, res) => {
     const docId = req.params.id;
     
+    console.log(` Getting document: ${docId}`);
+    
+    // Measure total server-side time
+    const serverStartTime = process.hrtime();
+    
     try {
-        const output = await runCpp(['doc', docId]);
-        const result = parseCppOutput(output);
+        const result = await runCpp(['doc', docId]);
         
-        res.json({
-            success: true,
-            docId: docId,
-            ...result
+        // Calculate server processing time
+        const serverElapsed = process.hrtime(serverStartTime);
+        const serverTotalMs = (serverElapsed[0] * 1000) + (serverElapsed[1] / 1000000);
+        
+        console.log(`  Document fetch took: ${serverTotalMs.toFixed(2)} ms`);
+        
+        const parsedResult = parseCppOutput(result.stdout, {
+            ...result.timing,
+            server_total_ms: serverTotalMs
         });
         
+        const response = {
+            success: true,
+            docId: docId,
+            performance: {
+                cpp_process_time_ms: result.timing.total_ms,
+                server_total_time_ms: serverTotalMs,
+                doc_id: docId,
+                timestamp: new Date().toISOString()
+            },
+            ...parsedResult
+        };
+        
+        res.json(response);
+        
     } catch (error) {
+        // Calculate server error time
+        const serverElapsed = process.hrtime(serverStartTime);
+        const serverTotalMs = (serverElapsed[0] * 1000) + (serverElapsed[1] / 1000000);
+        
         console.error('Document error:', error);
+        console.log(`  Failed after: ${serverTotalMs.toFixed(2)} ms`);
+        
         res.json({
             success: false,
             docId: docId,
             error: 'Document not found',
-            message: 'Try a document ID between 1 and 1000'
+            message: 'Try a document ID between 1 and 1000',
+            performance: {
+                server_total_time_ms: serverTotalMs,
+                doc_id: docId,
+                timestamp: new Date().toISOString()
+            }
         });
     }
 });
 
-// Test endpoint
+// Test endpoint with timing
 app.get('/api/test', (req, res) => {
+    const startTime = process.hrtime();
+    
     res.json({
         success: true,
         message: 'API is working',
@@ -289,6 +451,38 @@ app.get('/api/test', (req, res) => {
             suggest: '/api/suggest?q=query',
             health: '/api/health',
             document: '/api/doc/:id'
+        },
+        performance: {
+            server_response_time_ms: 0, // This will be calculated below
+            timestamp: new Date().toISOString()
+        }
+    });
+    
+    // Calculate and log response time
+    const elapsed = process.hrtime(startTime);
+    const elapsedMs = (elapsed[0] * 1000) + (elapsed[1] / 1000000);
+    console.log(`  Test endpoint response time: ${elapsedMs.toFixed(2)} ms`);
+});
+
+// Performance monitoring endpoint
+app.get('/api/perf', (req, res) => {
+    const memoryUsage = process.memoryUsage();
+    
+    res.json({
+        success: true,
+        performance: {
+            timestamp: new Date().toISOString(),
+            uptime_seconds: process.uptime(),
+            memory: {
+                rss: `${Math.round(memoryUsage.rss / 1024 / 1024)} MB`,
+                heap_total: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)} MB`,
+                heap_used: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB`,
+                external: `${Math.round(memoryUsage.external / 1024 / 1024)} MB`
+            },
+            node_version: process.version,
+            platform: process.platform,
+            cpp_binary: CPP_BINARY_PATH,
+            indices_path: INDICES_PATH
         }
     });
 });
@@ -304,17 +498,18 @@ app.listen(PORT, () => {
 ╔══════════════════════════════════════════════════════════════╗
 ║               CORD-19 SEARCH ENGINE                         ║
 ╚══════════════════════════════════════════════════════════════╝
-✅ Server running on: http://localhost:${PORT}
-🔍 Search API:  http://localhost:${PORT}/api/search?q=covid
-💡 Suggestions: http://localhost:${PORT}/api/suggest?q=cov
-📊 Health:      http://localhost:${PORT}/api/health
+ Server running on: http://localhost:${PORT}
+ Search API:  http://localhost:${PORT}/api/search?q=covid
+ Suggestions: http://localhost:${PORT}/api/suggest?q=cov
+ Health:      http://localhost:${PORT}/api/health
+ Performance: http://localhost:${PORT}/api/perf
 
-📁 Paths:
+ Paths:
   C++ Binary:   ${CPP_BINARY_PATH}
   Indices:      ${INDICES_PATH}
   Frontend:     ${path.join(__dirname, '../frontend')}
 
-👥 Team:
+ Team:
   • Wasi ULlah
   • M Ahmed  
   • Bilal Ahmed (603)

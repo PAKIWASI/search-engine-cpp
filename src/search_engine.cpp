@@ -59,7 +59,8 @@ double SearchEngine::compute_idf(u32 doc_freq, u32 total_docs) {
     return log(static_cast<double>(total_docs) / doc_freq);
 }
 
-double SearchEngine::compute_tf_idf(u32 term_freq, u32 doc_length, u32 doc_freq) const {
+double SearchEngine::compute_tf_idf(u32 term_freq, u32 doc_length, u32 doc_freq) const 
+{
     double tf = compute_tf(term_freq, doc_length);
     double idf = compute_idf(doc_freq, total_documents);
     return tf * idf;
@@ -80,7 +81,7 @@ void SearchEngine::rank_results_tfidf(std::vector<SearchResult>& results,
                 
                 // Get document length (total words, not unique terms)
                 u32 doc_length = forward_index.get_total_words(result.doc_id);
-                if (doc_length == 0) doc_length = 1;
+                if (doc_length == 0) { doc_length = 1; }
                 
                 double tfidf = compute_tf_idf(term_freq, doc_length, term.doc_freq);
                 result.score += tfidf;
@@ -92,7 +93,7 @@ void SearchEngine::rank_results_tfidf(std::vector<SearchResult>& results,
 void SearchEngine::rank_results_bm25(std::vector<SearchResult>& results,
                                     const std::vector<QueryTerm>& query_terms) 
 {
-    // Calculate average document length (using total words, not unique terms)
+    // Calculate average document length 
     double avg_doc_length = 0.0;
     u32 total_docs_with_terms = 0;
     
@@ -115,7 +116,7 @@ void SearchEngine::rank_results_bm25(std::vector<SearchResult>& results,
         result.score = 0.0;
         
         u32 doc_length = forward_index.get_total_words(result.doc_id);
-        if (doc_length == 0) doc_length = 1;
+        if (doc_length == 0) { doc_length = 1; }
         
         for (const auto& term : query_terms) {
             if (!term.found) { continue; }
@@ -137,8 +138,7 @@ void SearchEngine::rank_results_bm25(std::vector<SearchResult>& results,
 }
 
 std::vector<SearchResult> SearchEngine::search(const std::string& query, 
-                                              u32 max_results,
-                                              bool use_bm25) 
+                                              u32 max_results, bool use_bm25) 
 {
     std::vector<SearchResult> results;
     
@@ -442,9 +442,6 @@ void SearchEngine::display_results(const std::vector<SearchResult>& results,
     std::cout << "╚" <<  "╝\n";
 }
 
-// ============================================================================
-// Updated single_word_search to populate metadata
-// ============================================================================
 
 std::vector<SearchResult> SearchEngine::single_word_search(const QueryTerm& term, u32 max_results) 
 {
@@ -491,9 +488,6 @@ std::vector<SearchResult> SearchEngine::single_word_search(const QueryTerm& term
     return results;
 }
 
-// ============================================================================
-// Updated multi_word_search to populate metadata
-// ============================================================================
 
 std::vector<SearchResult> SearchEngine::multi_word_search(const std::vector<QueryTerm>& terms, 
                                                          u32 max_results) 

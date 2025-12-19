@@ -80,11 +80,11 @@ void print_system_info(const Lexicon& lexicon, const ForwardIndex& forward_index
         std::cout << "  Semantic Features:\n";
         std::cout << "    Embedding Dimension: " << embeddings->get_dimension() << "\n";
         std::cout << "    Vocabulary Size:     " << embeddings->get_vocabulary_size() << "\n";
-        std::cout << "    Status:              ✅ Ready for semantic search\n";
+        std::cout << "    Status:               Ready for semantic search\n";
         std::cout << "\n";
     } else {
         std::cout << "  Semantic Features:\n";
-        std::cout << "    Status:              ❌ Not available (embeddings not loaded)\n";
+        std::cout << "    Status:               Not available (embeddings not loaded)\n";
         std::cout << "\n";
     }
     
@@ -402,7 +402,7 @@ int main(int argc, char* argv[])
         
         std::cout << "\n";
         std::cout << "╔════════════════════════════════════════════════════════════════════╗\n";
-        std::cout << "║              🚀 Search Engine Ready!                               ║\n";
+        std::cout << "║               Search Engine Ready!                               ║\n";
         std::cout << "╚════════════════════════════════════════════════════════════════════╝\n";
         
         // Check for command-line query (batch mode)
@@ -414,7 +414,7 @@ int main(int argc, char* argv[])
                 query += argv[i];
             }
             
-            std::cout << "\n📋 Batch mode query: \"" << query << "\"\n";
+            std::cout << "\n Batch mode query: \"" << query << "\"\n";
             
             // Check if it's a semantic query
             std::string cmd = argv[2];
@@ -448,7 +448,6 @@ int main(int argc, char* argv[])
 }
 */
 
-#include "metadata_parser.hpp"
 #include "search_engine.hpp"
 #include "lexicon.hpp"
 #include "forward_index.hpp"
@@ -476,7 +475,8 @@ std::unique_ptr<WordEmbeddings> word_embeddings;
 std::unique_ptr<SemanticSearchEngine> semantic_engine;
 
 // Initialize the search engine
-bool initialize_engine(const std::string& index_path) {
+bool initialize_engine(const std::string& index_path) 
+{
     try {
         std::cout << "Loading indices from: " << index_path << std::endl;
         
@@ -486,7 +486,7 @@ bool initialize_engine(const std::string& index_path) {
             std::cerr << "Failed to load lexicon" << std::endl;
             return false;
         }
-        std::cout << "✓ Loaded lexicon with " << lexicon->size() << " terms" << std::endl;
+        std::cout << " Loaded lexicon with " << lexicon->size() << " terms" << std::endl;
         
         // Load forward index
         forward_index = std::make_unique<ForwardIndex>();
@@ -494,11 +494,11 @@ bool initialize_engine(const std::string& index_path) {
             std::cerr << "Failed to load forward index" << std::endl;
             return false;
         }
-        std::cout << "✓ Loaded forward index with " << forward_index->size() << " documents" << std::endl;
+        std::cout << " Loaded forward index with " << forward_index->size() << " documents" << std::endl;
         
         // Load inverted index
         inverted_index = std::make_unique<InvertedIndex>(index_path);
-        std::cout << "✓ Loaded inverted index (barrel system)" << std::endl;
+        std::cout << " Loaded inverted index (barrel system)" << std::endl;
         
         // Initialize search engine
         search_engine = std::make_unique<SearchEngine>(*lexicon, *forward_index, *inverted_index);
@@ -506,14 +506,14 @@ bool initialize_engine(const std::string& index_path) {
         // Try to load word embeddings
         word_embeddings = std::make_unique<WordEmbeddings>();
         if (word_embeddings->load_embeddings_binary(index_path + "glove.6B.100d.bin")) {
-            std::cout << "✓ Loaded word embeddings" << std::endl;
+            std::cout << " oaded word embeddings" << std::endl;
             semantic_engine = std::make_unique<SemanticSearchEngine>(
                 *word_embeddings, *search_engine, *lexicon, *forward_index);
         } else {
-            std::cout << "✗ Word embeddings not available" << std::endl;
+            std::cout << " Word embeddings not available" << std::endl;
         }
         
-        std::cout << "✅ Search engine initialized successfully!" << std::endl;
+        std::cout << " Search engine initialized successfully!" << std::endl;
         return true;
         
     } catch (const std::exception& e) {
@@ -571,16 +571,19 @@ json format_results(const std::vector<SearchResult>& results,
 }
 
 // Search command
-void handle_search(const std::string& query, int max_results = 10) {
+void handle_search(const std::string& query, int max_results = 10) 
+{
     auto start = std::chrono::high_resolution_clock::now();
     
     std::vector<SearchResult> results = search_engine->search(query, max_results, true);
     
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "Duration: " << duration << '\n';
+    std::cout.flush();
     
     json output = format_results(results, query, duration.count());
-    std::cout << output.dump(2) << std::endl;
+    std::cout << output.dump(2) << '\n';
 }
 
 // Suggestions command
@@ -638,7 +641,7 @@ void handle_document(int doc_id) {
     json j;
     
     const DocumentMetadata* meta = forward_index->get_document_metadata(doc_id);
-    if (meta) {
+    if (meta != nullptr) {
         j["success"] = true;
         j["docId"] = doc_id;
         j["cord_uid"] = meta->cord_uid;
@@ -648,11 +651,11 @@ void handle_document(int doc_id) {
         
         // Get document terms
         const std::vector<WordData>* terms = forward_index->get_document_terms(doc_id);
-        if (terms) {
+        if (terms != nullptr) {
             json terms_array = json::array();
             for (const auto& term : *terms) {
                 std::string* word = lexicon->get_word(term.word_id);
-                if (word) {
+                if (word != nullptr) {
                     json t;
                     t["word"] = *word;
                     t["freq"] = term.freq;
@@ -668,7 +671,7 @@ void handle_document(int doc_id) {
         j["docId"] = doc_id;
     }
     
-    std::cout << j.dump(2) << std::endl;
+    std::cout << j.dump(2) << '\n';
 }
 
 // Test command
@@ -681,7 +684,7 @@ void handle_test() {
     j["service"] = "CORD-19 Search Engine";
     j["version"] = "1.0.0";
     
-    std::cout << j.dump(2) << std::endl;
+    std::cout << j.dump(2) << '\n';
 }
 
 // Health command
@@ -694,7 +697,7 @@ void handle_health() {
     j["embeddings_loaded"] = (semantic_engine != nullptr);
     j["timestamp"] = std::chrono::system_clock::now().time_since_epoch().count();
     
-    std::cout << j.dump(2) << std::endl;
+    std::cout << j.dump(2) << '\n';
 }
 
 // Interactive mode (original)
@@ -803,7 +806,7 @@ int main(int argc, char* argv[])
     
     // Initialize the search engine
     if (!initialize_engine(index_path)) {
-        std::cerr << "Failed to initialize search engine. Exiting." << std::endl;
+        std::cerr << "Failed to initialize search engine. Exiting." << '\n';
         return 1;
     }
     
@@ -812,13 +815,21 @@ int main(int argc, char* argv[])
         std::string command = argv[2];
         
         if (command == "search" && argc > 3) {
+
+            auto start = std::chrono::high_resolution_clock::now();
+
             // Web search: main search <query>
             std::string query;
             for (int i = 3; i < argc; i++) {
-                if (i > 3) query += " ";
+                if (i > 3) { query += " "; }
                 query += argv[i];
             }
             handle_search(query);
+
+            auto end = std::chrono::high_resolution_clock::now();
+            double duration = std::chrono::duration<double>(end - start).count();
+
+            std::cout << "\nTIME FOR QUERY: " << duration << '\n';
         }
         else if (command == "suggest") {
             // Web suggestions: main suggest <query>
@@ -834,7 +845,7 @@ int main(int argc, char* argv[])
                 json j;
                 j["success"] = false;
                 j["error"] = "Invalid document ID";
-                std::cout << j.dump(2) << std::endl;
+                std::cout << j.dump(2) << '\n';
             }
         }
         else if (command == "test") {
@@ -865,6 +876,7 @@ int main(int argc, char* argv[])
         // No arguments, start interactive mode
         interactive_mode();
     }
+
     
     return 0;
 }
